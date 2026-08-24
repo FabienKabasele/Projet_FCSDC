@@ -1,0 +1,15 @@
+[theme]
+# Couleur principale
+primaryColor = "#1f77b4"
+
+# Couleur de fond
+backgroundColor = "#95c5ce"
+
+# Couleur secondaire (sidebar)
+secondaryBackgroundColor = "#273f4a"
+
+# Couleur du texte
+textColor = "#0e0f10"
+
+# Police
+font = "serif"
