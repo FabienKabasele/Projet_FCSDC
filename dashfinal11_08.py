@@ -1649,6 +1649,13 @@ def main():
         # ==================== SIDEBAR FILTRES ====================
         st.sidebar.header("🔍 Filtres")
         
+        # ========== BOUTON VERS TIFA TBCI (EN HAUT) ==========
+        st.sidebar.markdown(
+            '<a href="https://posaftbci.streamlit.app/" target="_blank" style="display: block; background-color: #ff7f0e; color: white; padding: 0.6rem 1rem; border-radius: 8px; text-decoration: none; font-weight: bold; text-align: center; margin-bottom: 1rem; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🚀 Basculer vers TIFA TBCI</a>',
+            unsafe_allow_html=True
+        )
+        # ========================================================
+        
         # 1. NIVEAU HIÉRARCHIQUE
         st.sidebar.subheader("📍 Niveau géographique")
         niveau = st.sidebar.radio(
