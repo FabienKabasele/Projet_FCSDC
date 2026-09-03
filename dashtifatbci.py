@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import warnings
+import io
 warnings.filterwarnings('ignore')
 
 # ============================================================
@@ -61,6 +62,216 @@ MOIS_FR = {
     5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
     9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
 }
+
+# ============================================================
+# DICTIONNAIRE DE RENOMMAGE DES COLONNES POUR L'EXPORT
+# ============================================================
+COLUMN_RENAME_MAP = {
+    # Identifiants
+    'SubmissionDate': 'DateSoumission',
+    'starttime': 'DebutEnquete',
+    'endtime': 'FinEnquete',
+    'deviceid': 'IDAppareil',
+    'subscriberid': 'IDAbonne',
+    'simserial': 'SerieSIM',
+    'phonenumber': 'NumeroTelephone',
+    'username': 'NomEnqueteur',
+    'duration': 'DureeSecondes',
+    'duration_min': 'DureeMinutes',
+    'caseid': 'IDCas',
+    'audio_audit': 'AuditAudio',
+    'text_audit': 'AuditTexte',
+    # Géographie
+    'q010a': 'CodeProvince',
+    'q010b': 'Province',
+    'q011a': 'CodeZoneSante',
+    'q011b': 'ZoneSante',
+    'q012a': 'CodeEtablissement',
+    'q012b': 'Etablissement',
+    'siteid': 'SiteID',
+    'surveyid': 'EnqueteID',
+    # Dates
+    'q001a': 'DateEnquete',
+    'q001b': 'HeureDebut',
+    'q001': 'Fonction',
+    'q001c': 'NomEnqueteur2',
+    'qmois': 'MoisCode',
+    'qannee': 'AnneeCode',
+    'mois': 'MoisNum',
+    'annee': 'Annee',
+    'trimestre': 'Trimestre',
+    'mois_nom': 'MoisNom',
+    # Index
+    'index_0_4ans_h': 'Index_0_4ans_H',
+    'index_0_4ans_f': 'Index_0_4ans_F',
+    'index_5_14ans_h': 'Index_5_14ans_H',
+    'index_5_14ans_f': 'Index_5_14ans_F',
+    'index_15plus_h': 'Index_15plus_H',
+    'index_15plus_f': 'Index_15plus_F',
+    'index_total_h': 'Index_Total_H',
+    'index_total_f': 'Index_Total_F',
+    'index_total': 'Index_Total',
+    'index_investigue_h': 'Index_Investigue_H',
+    'index_investigue_f': 'Index_Investigue_F',
+    'index_total_investigue': 'Index_Investigue_Total',
+    'pourcent_index_investig': 'TauxInvestigationIndex',
+    # Contacts répertoriés
+    'cf_rep_0_4ans_h': 'ContactsRep_0_4ans_H',
+    'cf_rep_0_4ans_f': 'ContactsRep_0_4ans_F',
+    'cf_rep_5_14ans_h': 'ContactsRep_5_14ans_H',
+    'cf_rep_5_14ans_f': 'ContactsRep_5_14ans_F',
+    'cf_rep_15plus_h': 'ContactsRep_15plus_H',
+    'cf_rep_15plus_f': 'ContactsRep_15plus_F',
+    'cf_rep_total_h': 'ContactsRep_Total_H',
+    'cf_rep_total_f': 'ContactsRep_Total_F',
+    'cf_rep_total': 'ContactsRep_Total',
+    # Contacts investigués
+    'cf_inv_0_4ans_h': 'ContactsInv_0_4ans_H',
+    'cf_inv_0_4ans_f': 'ContactsInv_0_4ans_F',
+    'cf_inv_5_14ans_h': 'ContactsInv_5_14ans_H',
+    'cf_inv_5_14ans_f': 'ContactsInv_5_14ans_F',
+    'cf_inv_15plus_h': 'ContactsInv_15plus_H',
+    'cf_inv_15plus_f': 'ContactsInv_15plus_F',
+    'cf_inv_total_h': 'ContactsInv_Total_H',
+    'cf_inv_total_f': 'ContactsInv_Total_F',
+    'cf_inv_total': 'ContactsInv_Total',
+    'cf_pct_total': 'TauxInvestigationContacts',
+    # VIH
+    'cf_vih_pos_h': 'VIH_Pos_H',
+    'cf_vih_pos_f': 'VIH_Pos_F',
+    'cf_vih_neg_h': 'VIH_Neg_H',
+    'cf_vih_neg_f': 'VIH_Neg_F',
+    'cf_vih_total_h': 'VIH_Testes_H',
+    'cf_vih_total_f': 'VIH_Testes_F',
+    'cf_vih_total': 'VIH_Testes_Total',
+    # TB présumée
+    'tb_presume_0_4ans_h': 'TBPresume_0_4ans_H',
+    'tb_presume_0_4ans_f': 'TBPresume_0_4ans_F',
+    'tb_presume_5_14ans_h': 'TBPresume_5_14ans_H',
+    'tb_presume_5_14ans_f': 'TBPresume_5_14ans_F',
+    'tb_presume_15plus_h': 'TBPresume_15plus_H',
+    'tb_presume_15plus_f': 'TBPresume_15plus_F',
+    'tb_presume_total_h': 'TBPresume_Total_H',
+    'tb_presume_total_f': 'TBPresume_Total_F',
+    'tb_presume_total': 'TBPresume_Total',
+    # TB orientée CDT
+    'tb_oriente_cdt_0_4ans_h': 'TBOrienteCDT_0_4ans_H',
+    'tb_oriente_cdt_0_4ans_f': 'TBOrienteCDT_0_4ans_F',
+    'tb_oriente_cdt_5_14ans_h': 'TBOrienteCDT_5_14ans_H',
+    'tb_oriente_cdt_5_14ans_f': 'TBOrienteCDT_5_14ans_F',
+    'tb_oriente_cdt_15plus_h': 'TBOrienteCDT_15plus_H',
+    'tb_oriente_cdt_15plus_f': 'TBOrienteCDT_15plus_F',
+    'tb_oriente_cdt_total_h': 'TBOrienteCDT_Total_H',
+    'tb_oriente_cdt_total_f': 'TBOrienteCDT_Total_F',
+    'tb_oriente_cdt_total': 'TBOrienteCDT_Total',
+    # TB confirmée
+    'cf_conf_tb_0_4ans_h': 'TBConf_0_4ans_H',
+    'cf_conf_tb_0_4ans_f': 'TBConf_0_4ans_F',
+    'cf_conf_tb_5_14ans_h': 'TBConf_5_14ans_H',
+    'cf_conf_tb_5_14ans_f': 'TBConf_5_14ans_F',
+    'cf_conf_tb_15plus_h': 'TBConf_15plus_H',
+    'cf_conf_tb_15plus_f': 'TBConf_15plus_F',
+    'cf_conf_tb_total_h': 'TBConf_Total_H',
+    'cf_conf_tb_total_f': 'TBConf_Total_F',
+    'cf_conf_tb_total': 'TBConf_Total',
+    # Traitement TB
+    'cf_conf_trait_0_4ans_h': 'TBTrait_0_4ans_H',
+    'cf_conf_trait_0_4ans_f': 'TBTrait_0_4ans_F',
+    'cf_conf_trait_5_14ans_h': 'TBTrait_5_14ans_H',
+    'cf_conf_trait_5_14ans_f': 'TBTrait_5_14ans_F',
+    'cf_conf_trait_15plus_h': 'TBTrait_15plus_H',
+    'cf_conf_trait_15plus_f': 'TBTrait_15plus_F',
+    'cf_conf_trait_total_h': 'TBTrait_Total_H',
+    'cf_conf_trait_total_f': 'TBTrait_Total_F',
+    'cf_conf_trait_total': 'TBTrait_Total',
+    # TPT éligibilité
+    'cf_tpt_elig_0_4ans_h': 'TPTElig_0_4ans_H',
+    'cf_tpt_elig_0_4ans_f': 'TPTElig_0_4ans_F',
+    'cf_tpt_elig_5_14ans_h': 'TPTElig_5_14ans_H',
+    'cf_tpt_elig_5_14ans_f': 'TPTElig_5_14ans_F',
+    'cf_tpt_elig_15plus_h': 'TPTElig_15plus_H',
+    'cf_tpt_elig_15plus_f': 'TPTElig_15plus_F',
+    'cf_tpt_elig_total_h': 'TPTElig_Total_H',
+    'cf_tpt_elig_total_f': 'TPTElig_Total_F',
+    'cf_tpt_elig_total': 'TPTElig_Total',
+    # TPT initié
+    'cf_tpt_init_0_4ans_h': 'TPTInit_0_4ans_H',
+    'cf_tpt_init_0_4ans_f': 'TPTInit_0_4ans_F',
+    'cf_tpt_init_5_14ans_h': 'TPTInit_5_14ans_H',
+    'cf_tpt_init_5_14ans_f': 'TPTInit_5_14ans_F',
+    'cf_tpt_init_15plus_h': 'TPTInit_15plus_H',
+    'cf_tpt_init_15plus_f': 'TPTInit_15plus_F',
+    'cf_tpt_init_total_h': 'TPTInit_Total_H',
+    'cf_tpt_init_total_f': 'TPTInit_Total_F',
+    'cf_tpt_init_total': 'TPTInit_Total',
+    'cf_tpt_pct_total': 'TauxInitiationTPT',
+    # TPT 3 mois
+    'tpt_3m_0_4ans_h': 'TPT3M_0_4ans_H',
+    'tpt_3m_0_4ans_f': 'TPT3M_0_4ans_F',
+    'tpt_3m_5_14ans_h': 'TPT3M_5_14ans_H',
+    'tpt_3m_5_14ans_f': 'TPT3M_5_14ans_F',
+    'tpt_3m_15plus_h': 'TPT3M_15plus_H',
+    'tpt_3m_15plus_f': 'TPT3M_15plus_F',
+    'tpt_3m_total_h': 'TPT3M_Total_H',
+    'tpt_3m_total_f': 'TPT3M_Total_F',
+    'tpt_3m_total': 'TPT3M_Total',
+    # TPT terminé
+    'tpt_termine_0_4ans_h': 'TPTTerm_0_4ans_H',
+    'tpt_termine_0_4ans_f': 'TPTTerm_0_4ans_F',
+    'tpt_termine_5_14ans_h': 'TPTTerm_5_14ans_H',
+    'tpt_termine_5_14ans_f': 'TPTTerm_5_14ans_F',
+    'tpt_termine_15plus_h': 'TPTTerm_15plus_H',
+    'tpt_termine_15plus_f': 'TPTTerm_15plus_F',
+    'tpt_termine_total_h': 'TPTTerm_Total_H',
+    'tpt_termine_total_f': 'TPTTerm_Total_F',
+    'tpt_termine_total': 'TPTTerm_Total',
+    'tpt_pct_total': 'TauxAchevementTPT',
+    # Traitement 6 mois
+    'tb_conf_trait6m_0_4ans_h': 'TBTrait6M_0_4ans_H',
+    'tb_conf_trait6m_0_4ans_f': 'TBTrait6M_0_4ans_F',
+    'tb_conf_trait6m_5_14ans_h': 'TBTrait6M_5_14ans_H',
+    'tb_conf_trait6m_5_14ans_f': 'TBTrait6M_5_14ans_F',
+    'tb_conf_trait6m_15plus_h': 'TBTrait6M_15plus_H',
+    'tb_conf_trait6m_15plus_f': 'TBTrait6M_15plus_F',
+    'tb_conf_trait6m_total_h': 'TBTrait6M_Total_H',
+    'tb_conf_trait6m_total_f': 'TBTrait6M_Total_F',
+    'tb_conf_trait6m_total': 'TBTrait6M_Total',
+    # TB guéris
+    'tb_gueris_0_4ans_h': 'TBGueris_0_4ans_H',
+    'tb_gueris_0_4ans_f': 'TBGueris_0_4ans_F',
+    'tb_gueris_5_14ans_h': 'TBGueris_5_14ans_H',
+    'tb_gueris_5_14ans_f': 'TBGueris_5_14ans_F',
+    'tb_gueris_15plus_h': 'TBGueris_15plus_H',
+    'tb_gueris_15plus_f': 'TBGueris_15plus_F',
+    'tb_gueris_total_h': 'TBGueris_Total_H',
+    'tb_gueris_total_f': 'TBGueris_Total_F',
+    'tb_gueris_total': 'TBGueris_Total',
+    # Indicateurs calculés (déjà présents dans le dataframe)
+    'cf_rep_total': 'Contacts_Repertories',
+    'cf_inv_total': 'Contacts_Investigues',
+    'cf_conf_tb_total': 'TB_Confirmees',
+    'cf_tpt_elig_total': 'TPT_Eligibles',
+    'cf_tpt_init_total': 'TPT_Inities',
+    'tpt_3m_total': 'TPT_3Mois',
+    'tpt_termine_total': 'TPT_Termines',
+    'tb_gueris_total': 'TB_Gueris',
+    'cf_vih_pos_total': 'VIH_Positifs',
+    'cf_vih_neg_total': 'VIH_Negatifs',
+    'tb_conf_trait6m_total': 'TBTraitement6M',
+    'index_total': 'Index_Total',
+    'index_total_investigue': 'Index_Investigues',
+    'tb_presume_total': 'TB_Presumees',
+    'tb_oriente_cdt_total': 'TB_Orientees_CDT'
+}
+
+def to_excel(df):
+    """Convertit un DataFrame en fichier Excel (bytes) avec noms de colonnes lisibles"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Renommer les colonnes
+        df_export = df.rename(columns=COLUMN_RENAME_MAP)
+        df_export.to_excel(writer, index=False, sheet_name='Donnees')
+    return output.getvalue()
 
 # ============================================================
 # CHARGEMENT DES DONNÉES
@@ -369,7 +580,7 @@ st.markdown("---")
 # ============================================================
 # ONGLETS
 # ============================================================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "🩺 Dépistage des Contacts",
     "🔬 Diagnostic TB",
     "🦠 Co-infection VIH/TB",
@@ -377,11 +588,12 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "💉 Traitement Préventif (TPT)",
     "📊 Performance par Zone",
     "📋 Tableau personnalisé",
-    "📈 Complétude"
+    "📈 Complétude",
+    "📥 Export"
 ])
 
 # ============================================================
-# TAB 1 à 7 : inchangés (repris intégralement)
+# TAB 1 à 8 : inchangés (identiques à la version précédente)
 # ============================================================
 with tab1:
     st.header(f"📋 Cascade de Dépistage des Contacts - {periode_texte}")
@@ -658,11 +870,8 @@ with tab7:
     else:
         st.info("Sélectionnez des indicateurs pour afficher le tableau")
 
-# ============================================================
-# TAB 8 : COMPLÉTUDE (synthèse filtrée par zone)
-# ============================================================
 with tab8:
-    df_comp = df_filtered  # déjà filtré par zone, établissement, période
+    df_comp = df_filtered
 
     if zone_filter != 'Toutes les zones':
         ess_attendus_zone = LOMAMI_ZS.get(zone_filter, 0)
@@ -728,6 +937,69 @@ with tab8:
 
         csv_zs = zs_stats.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Télécharger les données des ZS (CSV)", csv_zs, "zs_stats.csv", "text/csv")
+
+# ============================================================
+# TAB 9 : EXPORT
+# ============================================================
+with tab9:
+    st.header(f"📥 Export des données filtrées - {periode_texte}")
+    st.markdown("Téléchargez l'ensemble des données actuellement filtrées au format Excel ou CSV.")
+    st.markdown(f"**{len(df_filtered)}** lignes disponibles.")
+
+    col_exp1, col_exp2 = st.columns(2)
+
+    # Export Excel avec noms de colonnes lisibles
+    with col_exp1:
+        try:
+            excel_data = to_excel(df_filtered)
+            st.download_button(
+                label="📥 Télécharger en Excel (.xlsx)",
+                data=excel_data,
+                file_name=f"donnees_TIFA_TBCI_Lomami_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"Erreur lors de la génération de l'export Excel : {e}")
+
+    # Export CSV (avec noms de colonnes lisibles aussi)
+    with col_exp2:
+        try:
+            df_export_csv = df_filtered.rename(columns=COLUMN_RENAME_MAP)
+            csv_data = df_export_csv.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Télécharger en CSV",
+                data=csv_data,
+                file_name=f"donnees_TIFA_TBCI_Lomami_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"Erreur lors de la génération de l'export CSV : {e}")
+
+    # Aperçu des premières lignes
+    st.subheader("👀 Aperçu des données (10 premières lignes)")
+    if not df_filtered.empty:
+        # Renommer les colonnes pour l'affichage (sans toucher au DataFrame original)
+        df_preview = df_filtered.head(10).rename(columns=COLUMN_RENAME_MAP)
+        st.dataframe(df_preview, use_container_width=True)
+    else:
+        st.info("Aucune donnée à afficher.")
+
+    # Informations sur les colonnes
+    with st.expander("📖 Voir la correspondance des noms de colonnes"):
+        col_mapping = pd.DataFrame({
+            'Code original': list(COLUMN_RENAME_MAP.keys()),
+            'Nom lisible': list(COLUMN_RENAME_MAP.values())
+        })
+        st.dataframe(col_mapping, use_container_width=True, height=400)
+        # Export du mapping
+        st.download_button(
+            label="📥 Télécharger le mapping (CSV)",
+            data=col_mapping.to_csv(index=False).encode('utf-8'),
+            file_name=f"mapping_colonnes_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
 
 # ============================================================
 # FOOTER
