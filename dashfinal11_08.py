@@ -394,8 +394,8 @@ ZS_CDT_REFERENCE = pd.DataFrame({
         'Haut Katanga', 'Haut Lomami', 'Kasai Oriental', 'Kasai Central',
         'Lualaba', 'Lomami', 'Sud Kivu', 'Sankuru', 'Tanganyika'
     ],
-    'ZS_attendues': [27, 16, 19, 26, 14, 16, 31, 16, 11],
-    'CDT_attendus': [107, 74, 132, 109, 75, 106, 132, 93, 68]
+    'ZS_attendues': [27, 16, 19, 26, 14, 16, 34, 16, 11],
+    'CDT_attendus': [107, 74, 132, 109, 75, 106, 135, 93, 68]
 })
 
 DATE_LIMITE_JOUR = 7
