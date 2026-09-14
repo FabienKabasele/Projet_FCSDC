@@ -72,6 +72,34 @@ st.markdown("""
         text-decoration: none;
         font-weight: bold;
     }
+    .status-ok {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    .status-warning {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    .status-danger {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    .status-expiry {
+        background-color: #cce5ff;
+        color: #004085;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -386,6 +414,77 @@ def to_excel(df):
     return output.getvalue()
 
 # ============================================================================
+# DICTIONNAIRE DES MÉDICAMENTS
+# ============================================================================
+
+MEDICAMENTS = {
+    'RHZE adulte': {
+        'prefix': 'rhze',
+        'nom': 'RHZE adulte (R=150mg, H=75mg, Z=400mg, E=275mg)',
+        'couleur': '#1f77b4'
+    },
+    'RH adulte': {
+        'prefix': 'rh',
+        'nom': 'RH adulte (R=150mg, H=75mg)',
+        'couleur': '#ff7f0e'
+    },
+    'Rifapentine/Isoniazide': {
+        'prefix': 'rifiso',
+        'nom': 'Rifapentine/Isoniazide (H=300mg, P=300mg)',
+        'couleur': '#2ca02c'
+    },
+    'RHZ enfant': {
+        'prefix': 'rhz',
+        'nom': 'RHZ enfant (R=75mg, H=50mg, Z=150mg)',
+        'couleur': '#d62728'
+    },
+    'Bédaquilline': {
+        'prefix': 'beda',
+        'nom': 'Bédaquilline (100mg)',
+        'couleur': '#9467bd'
+    },
+    'Lévofloxacine': {
+        'prefix': 'levo',
+        'nom': 'Lévofloxacine (250mg)',
+        'couleur': '#8c564b'
+    },
+    'Prothionamide': {
+        'prefix': 'prothio',
+        'nom': 'Prothionamide (250mg)',
+        'couleur': '#e377c2'
+    },
+    'Isoniazide': {
+        'prefix': 'inh',
+        'nom': 'Isoniazide (300mg)',
+        'couleur': '#7f7f7f'
+    },
+    'Clofazimine 50mg': {
+        'prefix': 'clofa50',
+        'nom': 'Clofazimine (50mg)',
+        'couleur': '#bcbd22'
+    },
+    'Clofazimine 100mg': {
+        'prefix': 'clofa100',
+        'nom': 'Clofazimine (100mg)',
+        'couleur': '#17becf'
+    },
+    'Ethambutol': {
+        'prefix': 'etham',
+        'nom': 'Ethambutol (400mg)',
+        'couleur': '#aec7e8'
+    },
+    'Pyrazinamide': {
+        'prefix': 'pyra',
+        'nom': 'Pyrazinamide (400mg)',
+        'couleur': '#ffbb78'
+    }
+}
+
+COLONNES_MEDICAMENTS = ['stock_initial', 'quantite_recue', 'stock_disponible', 
+                        'quantite_consomme', 'stock_theorique', 'stock_physique',
+                        'pertes_exp', 'jours_rupture', 'date_expiration']
+
+# ============================================================================
 # DONNÉES DE RÉFÉRENCE POUR LA COMPLÉTUDE
 # ============================================================================
 
@@ -446,6 +545,15 @@ def clean_province_name(name):
         return name
     
     return name
+
+def safe_int_convert(value):
+    """Convertit une valeur en entier de manière sécurisée"""
+    try:
+        if pd.isna(value) or np.isinf(value) or np.isnan(value):
+            return 0
+        return int(value)
+    except (ValueError, TypeError):
+        return 0
 
 @st.cache_data
 def load_and_process_data():
@@ -627,7 +735,7 @@ def load_and_process_data():
     df['enfants_moins_5_commences'] = df['q9_1_age5m']
     df['enfants_moins_5_termines'] = df['q10_0_age5m']
     
-    # Taux (uniquement ceux qui sont valides sans suivi de cohorte)
+    # Taux
     df['xpert_test_rate'] = np.where(df['q1_4_hf_total'] > 0, 
                                       df['q1_5_hf_total'] / df['q1_4_hf_total'] * 100, 0)
     df['rrmdr_detection_rate'] = np.where(df['q4_0_hf_total'] > 0,
@@ -649,6 +757,17 @@ def load_and_process_data():
     
     # Supprimer les lignes avec province_name NULL
     df = df[df['province_name'].notna()]
+    
+    # ==================== TRAITEMENT DES MÉDICAMENTS ====================
+    # Nettoyer les colonnes de médicaments
+    for medicament, info in MEDICAMENTS.items():
+        prefix = info['prefix']
+        for col in COLONNES_MEDICAMENTS:
+            nom_col = f"{prefix}_{col}"
+            if nom_col in df.columns:
+                df[nom_col] = pd.to_numeric(df[nom_col], errors='coerce').fillna(0)
+                if 'date' in col:
+                    df[nom_col] = pd.to_datetime(df[nom_col], errors='coerce')
     
     return df
 
@@ -969,65 +1088,391 @@ def show_prevention_tab(df_filtered):
         fig_tpt_comp.update_layout(height=300)
         st.plotly_chart(fig_tpt_comp, use_container_width=True)
 
-def show_logistique_tab(df_filtered):
-    """Onglet Logistique"""
-    st.subheader("📦 Gestion des stocks et intrants")
+# ============================================================================
+# FONCTION ONGLET MÉDICAMENTS 
+# ============================================================================
+
+def show_medicaments_tab(df_filtered):
+    """Onglet Gestion des Médicaments"""
+    st.subheader("💊 Gestion des stocks de médicaments")
     
-    produits = {
-        'Cartouches Xpert MTB/RIF': {
-            'initial': 'xpert_stock_initial',
-            'physique': 'xpert_stock_physique',
-            'rupture': 'xpert_jours_rupture',
-            'expiration': 'xpert_quantite_expiration'
-        },
-        'Ethambutol (E) 100 mg': {
-            'initial': 'e100_stock_initial',
-            'physique': 'e100_stock_physique',
-            'rupture': 'e100_jours_rupture',
-            'expiration': 'e100_quantite_expiration'
-        },
-        'RHZE 150/75/400/275 mg': {
-            'initial': 'rhze_stock_initial',
-            'physique': 'rhze_stock_physique',
-            'rupture': 'rhze_jours_rupture',
-            'expiration': 'rhze_quantite_expiration'
-        },
-        'RH 150/75 mg': {
-            'initial': 'rh150_stock_initial',
-            'physique': 'rh150_stock_physique',
-            'rupture': 'rh150_jours_rupture',
-            'expiration': 'rh150_quantite_expiration'
-        },
-        'RH 75/50 mg': {
-            'initial': 'rh75_stock_initial',
-            'physique': 'rh75_stock_physique',
-            'rupture': 'rh75_jours_rupture',
-            'expiration': 'rh75_quantite_expiration'
+    # Vérifier si les colonnes de médicaments existent
+    medicaments_presents = []
+    for medicament, info in MEDICAMENTS.items():
+        prefix = info['prefix']
+        if f"{prefix}_stock_disponible" in df_filtered.columns:
+            medicaments_presents.append(medicament)
+    
+    if not medicaments_presents:
+        st.warning("⚠️ Aucune donnée de médicaments trouvée dans le fichier. Vérifie que les colonnes sont correctement importées.")
+        return
+    
+    # ===== KPI =====
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_stock = 0
+    nb_ruptures = 0
+    nb_expiration = 0
+    medicaments_avec_stock = 0
+    
+    for medicament in medicaments_presents:
+        prefix = MEDICAMENTS[medicament]['prefix']
+        stock_col = f"{prefix}_stock_disponible"
+        jours_rupture_col = f"{prefix}_jours_rupture"
+        date_exp_col = f"{prefix}_date_expiration"
+        
+        if stock_col in df_filtered.columns:
+            stock_total = df_filtered[stock_col].sum()
+            total_stock += stock_total
+            if stock_total > 0:
+                medicaments_avec_stock += 1
+        
+        if jours_rupture_col in df_filtered.columns:
+            if df_filtered[jours_rupture_col].sum() > 0:
+                nb_ruptures += 1
+        
+        if date_exp_col in df_filtered.columns:
+            aujourdhui = pd.Timestamp.now()
+            expirations = df_filtered[date_exp_col].dropna()
+            if len(expirations) > 0:
+                proches_exp = expirations[expirations <= aujourdhui + pd.Timedelta(days=180)]
+                if len(proches_exp) > 0:
+                    nb_expiration += 1
+    
+    with col1:
+        st.metric("📦 Stock total disponible", f"{int(total_stock):,}")
+    with col2:
+        st.metric("💊 Médicaments avec stock", f"{medicaments_avec_stock}/{len(medicaments_presents)}")
+    with col3:
+        st.metric("⚠️ Médicaments en rupture", f"{nb_ruptures}", delta="🟡 Alerte" if nb_ruptures > 0 else None)
+    with col4:
+        st.metric("📅 Expiration < 6 mois", f"{nb_expiration}", delta="🔴 Urgent" if nb_expiration > 0 else None)
+    
+    st.markdown("---")
+    
+    # ===== TABLEAU DES STOCKS =====
+    st.subheader("📋 État des stocks par médicament")
+    
+    # Construction du tableau
+    data_stocks = []
+    total_cdts = len(df_filtered)  # Nombre total d'établissements
+    
+    for medicament in medicaments_presents:
+        prefix = MEDICAMENTS[medicament]['prefix']
+        row = {'Médicament': medicament}
+        
+        # Noms des colonnes pour l'affichage
+        col_mapping = {
+            'stock_initial': 'Stock Initial',
+            'quantite_recue': 'Quantité Reçue',
+            'stock_disponible': 'Stock Disponible',
+            'quantite_consomme': 'Quantité Consommée',
+            'stock_theorique': 'Stock Théorique',
+            'stock_physique': 'Stock Physique',
+            'pertes_exp': 'Pertes Exp',
+            'jours_rupture': 'Jours Rupture (moyenne)',
+            'date_expiration': 'Date Expiration'
         }
-    }
-    
-    for produit, colonnes in produits.items():
-        with st.expander(f"📊 {produit}"):
-            if all(col in df_filtered.columns for col in colonnes.values()):
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Stock initial", f"{df_filtered[colonnes['initial']].sum():,.0f}")
-                with col2:
-                    st.metric("Stock physique", f"{df_filtered[colonnes['physique']].sum():,.0f}")
-                with col3:
-                    jours_rupture = df_filtered[colonnes['rupture']].sum()
-                    st.metric("Jours de rupture", f"{jours_rupture:.0f}")
-                with col4:
-                    qte_expiration = df_filtered[colonnes['expiration']].sum()
-                    st.metric("Expiration <6 mois", f"{qte_expiration:.0f}")
-                
-                if jours_rupture > 0:
-                    st.warning(f"⚠️ Rupture de stock : {jours_rupture:.0f} jours")
-                if qte_expiration > 0:
-                    st.error(f"🔴 Expiration imminente : {qte_expiration:.0f} unités")
+        
+        for col_key, col_display in col_mapping.items():
+            nom_col = f"{prefix}_{col_key}"
+            if nom_col in df_filtered.columns:
+                if 'date' in col_key:
+                    dates = df_filtered[nom_col].dropna()
+                    if len(dates) > 0:
+                        row[col_display] = dates.max().strftime('%d/%m/%Y')
+                    else:
+                        row[col_display] = '-'
+                elif 'jours_rupture' in col_key:
+                    # Pour les jours de rupture : moyenne
+                    valeurs = df_filtered[nom_col]
+                    # Filtrer les valeurs > 0 pour la moyenne
+                    valeurs_positives = valeurs[valeurs > 0]
+                    if len(valeurs_positives) > 0:
+                        moyenne = valeurs_positives.mean()
+                        row[col_display] = round(moyenne, 1) if moyenne > 0 else 0
+                    else:
+                        row[col_display] = 0
+                else:
+                    val = df_filtered[nom_col].sum()
+                    row[col_display] = int(val) if val > 0 else 0
             else:
-                st.info(f"Données non disponibles pour {produit}")
+                row[col_display] = '-'
+        
+        # ===== NOUVEAU : Compter les CDT en rupture =====
+        jours_rupture_col = f"{prefix}_jours_rupture"
+        nb_cdt_rupture = 0
+        if jours_rupture_col in df_filtered.columns:
+            # Compter les établissements avec jours_rupture > 0
+            nb_cdt_rupture = (df_filtered[jours_rupture_col] > 0).sum()
+        
+        row['Nb CDT en rupture'] = nb_cdt_rupture
+        
+        # Calcul du taux de rupture (%)
+        if total_cdts > 0:
+            taux_rupture = (nb_cdt_rupture / total_cdts) * 100
+            row['Taux de rupture (%)'] = round(taux_rupture, 1)
+        else:
+            row['Taux de rupture (%)'] = 0
+        
+        # Statut du stock (basé sur le nombre de CDT en rupture)
+        if nb_cdt_rupture > 0:
+            if nb_cdt_rupture > total_cdts * 0.5:  # Plus de 50% des CDT en rupture
+                row['Statut'] = '🔴 Crise'
+            elif nb_cdt_rupture > total_cdts * 0.2:  # Plus de 20% des CDT en rupture
+                row['Statut'] = '🟠 Risque élevé'
+            else:
+                row['Statut'] = '🟡 Rupture partielle'
+        else:
+            row['Statut'] = '🟢 Stock OK'
+        
+        # Vérifier l'expiration
+        date_exp = row.get('Date Expiration', '-')
+        if date_exp != '-' and date_exp != 0:
+            try:
+                date_obj = pd.to_datetime(date_exp, format='%d/%m/%Y')
+                jours_restants = (date_obj - pd.Timestamp.now()).days
+                if 0 < jours_restants < 180:
+                    row['Statut'] = '🔵 Expiration proche'
+                elif jours_restants <= 0:
+                    row['Statut'] = '🔴 Expiré'
+            except:
+                pass
+        
+        data_stocks.append(row)
+    
+    df_stocks = pd.DataFrame(data_stocks)
+    
+    # Réorganiser les colonnes pour l'affichage
+    colonnes_ordre = ['Médicament', 'Stock Initial', 'Quantité Reçue', 'Stock Disponible', 
+                      'Quantité Consommée', 'Stock Théorique', 'Stock Physique', 
+                      'Pertes Exp', 'Jours Rupture (moyenne)', 'Nb CDT en rupture', 
+                      'Taux de rupture (%)', 'Date Expiration', 'Statut']
+    colonnes_existantes = [col for col in colonnes_ordre if col in df_stocks.columns]
+    df_stocks_display = df_stocks[colonnes_existantes]
+    
+    st.dataframe(df_stocks_display, use_container_width=True, height=400)
+    
+    # Export des données médicaments
+    col_export1, col_export2 = st.columns(2)
+    with col_export1:
+        st.download_button(
+            label="📥 Télécharger les stocks (CSV)",
+            data=df_stocks_display.to_csv(index=False).encode('utf-8'),
+            file_name=f"stocks_medicaments_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    with col_export2:
+        st.download_button(
+            label="📥 Télécharger les stocks (Excel)",
+            data=to_excel(df_stocks_display),
+            file_name=f"stocks_medicaments_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    
+    st.markdown("---")
+    
+    # ===== GRAPHIQUES =====
+    st.subheader("📊 Visualisation des stocks")
+    
+    col_g1, col_g2 = st.columns(2)
+    
+    # Graphique 1 : Stock disponible par médicament
+    with col_g1:
+        df_graph = df_stocks[df_stocks['Stock Disponible'] != '-'].copy()
+        if len(df_graph) > 0:
+            df_graph['Stock Disponible'] = pd.to_numeric(df_graph['Stock Disponible'], errors='coerce')
+            df_graph = df_graph[df_graph['Stock Disponible'] > 0]
+            
+            if len(df_graph) > 0:
+                fig_stock = px.bar(
+                    df_graph,
+                    x='Médicament',
+                    y='Stock Disponible',
+                    title='Stock disponible par médicament',
+                    color='Stock Disponible',
+                    color_continuous_scale='Blues',
+                    text='Stock Disponible'
+                )
+                fig_stock.update_traces(textposition='outside')
+                fig_stock.update_layout(xaxis_tickangle=45, height=400)
+                st.plotly_chart(fig_stock, use_container_width=True)
+            else:
+                st.info("Aucun stock disponible à afficher")
+        else:
+            st.info("Aucune donnée de stock disponible")
+    
+    # Graphique 2 : Nombre de CDT en rupture par médicament
+    with col_g2:
+        if 'Nb CDT en rupture' in df_stocks.columns:
+            df_rupture_cdt = df_stocks[df_stocks['Nb CDT en rupture'] > 0].copy()
+            
+            if len(df_rupture_cdt) > 0:
+                fig_rupture_cdt = px.bar(
+                    df_rupture_cdt,
+                    x='Médicament',
+                    y='Nb CDT en rupture',
+                    title='Nombre de CDT avec rupture de stock',
+                    color='Nb CDT en rupture',
+                    color_continuous_scale='Reds',
+                    text='Nb CDT en rupture'
+                )
+                fig_rupture_cdt.update_traces(textposition='outside')
+                fig_rupture_cdt.update_layout(xaxis_tickangle=45, height=400)
+                st.plotly_chart(fig_rupture_cdt, use_container_width=True)
+            else:
+                st.success("✅ Aucun CDT en rupture de stock")
+        else:
+            st.info("Données de rupture non disponibles")
+    
+    # ===== GRAPHIQUES DE LA DEUXIÈME LIGNE =====
+    col_g3, col_g4 = st.columns(2)
+    
+    # Graphique 3 : Comparaison Stock Théorique vs Stock Physique
+    with col_g3:
+        if 'Stock Théorique' in df_stocks.columns and 'Stock Physique' in df_stocks.columns:
+            df_comp = df_stocks.copy()
+            df_comp['Stock Théorique'] = pd.to_numeric(df_comp['Stock Théorique'], errors='coerce').fillna(0)
+            df_comp['Stock Physique'] = pd.to_numeric(df_comp['Stock Physique'], errors='coerce').fillna(0)
+            df_comp = df_comp[(df_comp['Stock Théorique'] > 0) | (df_comp['Stock Physique'] > 0)]
+            
+            if len(df_comp) > 0:
+                fig_comp = go.Figure()
+                fig_comp.add_trace(go.Bar(
+                    x=df_comp['Médicament'],
+                    y=df_comp['Stock Théorique'],
+                    name='Stock Théorique',
+                    marker_color='#1f77b4'
+                ))
+                fig_comp.add_trace(go.Bar(
+                    x=df_comp['Médicament'],
+                    y=df_comp['Stock Physique'],
+                    name='Stock Physique',
+                    marker_color='#ff7f0e'
+                ))
+                fig_comp.update_layout(
+                    title='Stock Théorique vs Stock Physique',
+                    xaxis_title='Médicament',
+                    yaxis_title='Quantité',
+                    barmode='group',
+                    height=400,
+                    xaxis_tickangle=45
+                )
+                st.plotly_chart(fig_comp, use_container_width=True)
+            else:
+                st.info("Aucune donnée de comparaison disponible")
+        else:
+            st.info("Les colonnes Stock Théorique et/ou Stock Physique ne sont pas disponibles")
+    
+    # Graphique 4 : Taux de rupture par médicament
+    with col_g4:
+        if 'Taux de rupture (%)' in df_stocks.columns:
+            df_taux = df_stocks[df_stocks['Taux de rupture (%)'] > 0].copy()
+            
+            if len(df_taux) > 0:
+                fig_taux = px.bar(
+                    df_taux,
+                    x='Médicament',
+                    y='Taux de rupture (%)',
+                    title='Taux de rupture par médicament (%)',
+                    color='Taux de rupture (%)',
+                    color_continuous_scale='Oranges',
+                    text='Taux de rupture (%)'
+                )
+                fig_taux.update_traces(textposition='outside')
+                fig_taux.update_layout(
+                    xaxis_tickangle=45, 
+                    height=400,
+                    yaxis_range=[0, 100]
+                )
+                # Ajouter une ligne de seuil à 20%
+                fig_taux.add_hline(y=20, line_dash="dash", line_color="red", 
+                                  annotation_text="Seuil d'alerte 20%")
+                st.plotly_chart(fig_taux, use_container_width=True)
+            else:
+                st.success("✅ Aucune rupture enregistrée")
+        else:
+            st.info("Données de taux de rupture non disponibles")
+    
+    # ===== ALERTES =====
+    st.markdown("---")
+    st.subheader("🔔 Alertes stock")
+    
+    alertes = []
+    
+    # Alertes de rupture (avec nombre de CDT)
+    for _, row in df_stocks.iterrows():
+        nb_rupture = row.get('Nb CDT en rupture', 0)
+        taux_rupture = row.get('Taux de rupture (%)', 0)
+        if nb_rupture > 0:
+            if taux_rupture > 50:
+                alertes.append(f"🔴 **CRITIQUE - {row['Médicament']}** : {int(nb_rupture)} CDT en rupture ({taux_rupture}%) - Situation critique")
+            elif taux_rupture > 20:
+                alertes.append(f"🟠 **ÉLEVÉ - {row['Médicament']}** : {int(nb_rupture)} CDT en rupture ({taux_rupture}%) - Risque de pénurie")
+            else:
+                alertes.append(f"🟡 **MODÉRÉ - {row['Médicament']}** : {int(nb_rupture)} CDT en rupture ({taux_rupture}%) - Surveillance requise")
+    
+    # Alertes de stock faible
+    for _, row in df_stocks.iterrows():
+        stock = row.get('Stock Disponible', 0)
+        if stock != '-' and pd.to_numeric(stock, errors='coerce') < 100 and pd.to_numeric(stock, errors='coerce') > 0:
+            alertes.append(f"🟡 **{row['Médicament']}** : Stock faible ({int(stock)} unités restantes)")
+    
+    # Alertes d'expiration
+    for _, row in df_stocks.iterrows():
+        date_exp = row.get('Date Expiration', '-')
+        if date_exp != '-' and date_exp != 0:
+            try:
+                date_obj = pd.to_datetime(date_exp, format='%d/%m/%Y')
+                jours_restants = (date_obj - pd.Timestamp.now()).days
+                if 0 < jours_restants < 180:
+                    alertes.append(f"🔵 **{row['Médicament']}** : Expiration dans {jours_restants} jours ({date_exp})")
+                elif jours_restants <= 0:
+                    alertes.append(f"🔴 **{row['Médicament']}** : Expiré depuis {-jours_restants} jours ({date_exp})")
+            except:
+                pass
+    
+    if alertes:
+        for alerte in alertes:
+            st.warning(alerte)
+    else:
+        st.success("✅ Aucune alerte à signaler. Tous les stocks sont OK !")
+    
+    # ===== STATISTIQUES SUPPLÉMENTAIRES =====
+    st.markdown("---")
+    st.subheader("📊 Synthèse des ruptures")
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    
+    with col_s1:
+        # Nombre total de CDT
+        st.metric("🏥 Total CDT", f"{total_cdts}")
+    
+    with col_s2:
+        # Nombre de médicaments avec rupture
+        nb_medicaments_rupture = (df_stocks['Nb CDT en rupture'] > 0).sum() if 'Nb CDT en rupture' in df_stocks.columns else 0
+        st.metric("💊 Médicaments en rupture", f"{nb_medicaments_rupture}/{len(medicaments_presents)}")
+    
+    with col_s3:
+        # Moyenne des jours de rupture
+        if 'Jours Rupture (moyenne)' in df_stocks.columns:
+            jours_rupture_vals = pd.to_numeric(df_stocks['Jours Rupture (moyenne)'], errors='coerce')
+            jours_rupture_vals = jours_rupture_vals[jours_rupture_vals > 0]
+            moy_jours = jours_rupture_vals.mean() if len(jours_rupture_vals) > 0 else 0
+            st.metric("📊 Jours de rupture moyen", f"{moy_jours:.1f} jours")
+        else:
+            st.metric("📊 Jours de rupture moyen", "N/A")
+    
+    with col_s4:
+        # Taux de rupture global
+        if 'Nb CDT en rupture' in df_stocks.columns and total_cdts > 0:
+            total_ruptures = df_stocks['Nb CDT en rupture'].sum()
+            # Éviter le double comptage : un CDT peut avoir plusieurs médicaments en rupture
+            # On considère qu'un CDT est en rupture s'il a au moins un médicament en rupture
+            # Pour simplifier, on affiche le nombre total de ruptures
+            st.metric("⚠️ Ruptures totales", f"{int(total_ruptures)}")
+        else:
+            st.metric("⚠️ Ruptures totales", "N/A")
 
 # ============================================================================
 # FONCTIONS DE COMPLÉTUDE ET PROMPTITUDE
@@ -1494,151 +1939,6 @@ def show_donnees_brutes_tab(df_filtered):
         )
 
 # ============================================================================
-# ONGLET STOCKS PAR PROVINCE
-# ============================================================================
-
-def safe_int_convert(value):
-    """Convertit une valeur en entier de manière sécurisée"""
-    try:
-        if pd.isna(value) or np.isinf(value) or np.isnan(value):
-            return 0
-        return int(value)
-    except (ValueError, TypeError):
-        return 0
-
-def show_stocks_province_tab(df):
-    """Onglet 7 : Gestion des stocks par province"""
-    st.subheader("📊 Gestion des stocks par province")
-    st.markdown("**Analyse des stocks :** Consommation Moyenne Mensuelle (CMM) vs Stock Disponible")
-    
-    colonnes_necessaires = ['province_name', 'q_cmm', 'q_stock_disp', 'stock_pro', 'stock_cdr']
-    colonnes_manquantes = [col for col in colonnes_necessaires if col not in df.columns]
-    
-    if colonnes_manquantes:
-        st.warning(f"⚠️ Colonnes manquantes dans les données : {', '.join(colonnes_manquantes)}")
-        with st.expander("🔍 Voir les colonnes disponibles"):
-            st.write(list(df.columns))
-        return
-    
-    for col in ['q_cmm', 'q_stock_disp', 'stock_pro', 'stock_cdr']:
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        df[col] = df[col].replace([np.inf, -np.inf], 0)
-    
-    stocks_province = df.groupby('province_name').agg({
-        'q_cmm': 'sum',
-        'q_stock_disp': 'sum',
-        'stock_pro': 'sum',
-        'stock_cdr': 'sum'
-    }).reset_index()
-    
-    for col in ['q_cmm', 'q_stock_disp', 'stock_pro', 'stock_cdr']:
-        stocks_province[col] = stocks_province[col].fillna(0)
-    
-    stocks_province['alerte_rouge'] = stocks_province['q_cmm'] < stocks_province['q_stock_disp']
-    stocks_province['ratio_stock_cmm'] = stocks_province.apply(
-        lambda row: row['q_stock_disp'] / row['q_cmm'] if row['q_cmm'] > 0 else 0, 
-        axis=1
-    )
-    
-    ordre_provinces = [
-        'Haut Katanga', 'Haut Lomami', 'Kasai Oriental', 'Kasai Central',
-        'Lualaba', 'Lomami', 'Sud Kivu', 'Sankuru', 'Tanganyika'
-    ]
-    stocks_province['province_name'] = pd.Categorical(stocks_province['province_name'], 
-                                                       categories=ordre_provinces, 
-                                                       ordered=True)
-    stocks_province = stocks_province.sort_values('province_name')
-    
-    total_cmm = safe_int_convert(stocks_province['q_cmm'].sum())
-    total_stock = safe_int_convert(stocks_province['q_stock_disp'].sum())
-    total_stock_pro = safe_int_convert(stocks_province['stock_pro'].sum())
-    total_stock_cdr = safe_int_convert(stocks_province['stock_cdr'].sum())
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📦 Total CMM", f"{total_cmm:,.0f}")
-    with col2:
-        st.metric("🏭 Total Stock Disponible", f"{total_stock:,.0f}")
-    with col3:
-        st.metric("📋 Total Stock Programmé", f"{total_stock_pro:,.0f}")
-    with col4:
-        st.metric("🏢 Total Stock CDR", f"{total_stock_cdr:,.0f}")
-    
-    df_affichage = stocks_province.copy()
-    df_affichage['ratio_stock_cmm'] = df_affichage['ratio_stock_cmm'].apply(
-        lambda x: f"{x:.1f}x" if x > 0 else "N/A"
-    )
-    df_affichage['alerte'] = df_affichage['alerte_rouge'].apply(
-        lambda x: "🔴 ALERTE : Stock > CMM" if x else "✅ OK"
-    )
-    
-    colonnes_affichage = {
-        'province_name': 'Province',
-        'q_cmm': 'CMM',
-        'q_stock_disp': 'Stock Disponible',
-        'stock_pro': 'Stock Programmée',
-        'stock_cdr': 'Stock CDR',
-        'ratio_stock_cmm': 'Ratio Stock/CMM',
-        'alerte': 'Statut'
-    }
-    
-    df_style = df_affichage[list(colonnes_affichage.keys())].rename(columns=colonnes_affichage)
-    st.dataframe(df_style, use_container_width=True)
-    
-    # Export stocks
-    col_exp1, col_exp2 = st.columns(2)
-    stocks_export = stocks_province.rename(columns={
-        'province_name': 'Province',
-        'q_cmm': 'CMM',
-        'q_stock_disp': 'Stock_Disponible',
-        'stock_pro': 'Stock_Programme',
-        'stock_cdr': 'Stock_CDR',
-        'ratio_stock_cmm': 'Ratio_Stock_CMM',
-        'alerte_rouge': 'Alerte'
-    })
-    
-    with col_exp1:
-        st.download_button(
-            label="📥 Télécharger les stocks (CSV)",
-            data=stocks_export.to_csv(index=False).encode('utf-8'),
-            file_name=f"stocks_provinces_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    
-    with col_exp2:
-        st.download_button(
-            label="📥 Télécharger les stocks (Excel)",
-            data=to_excel(stocks_export),
-            file_name=f"stocks_provinces_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=stocks_province['province_name'],
-        y=stocks_province['q_cmm'],
-        name='CMM',
-        marker_color='#1f77b4'
-    ))
-    fig.add_trace(go.Bar(
-        x=stocks_province['province_name'],
-        y=stocks_province['q_stock_disp'],
-        name='Stock Disponible',
-        marker_color=stocks_province['alerte_rouge'].apply(
-            lambda x: '#d62728' if x else '#2ca02c'
-        )
-    ))
-    fig.update_layout(
-        title="Comparaison CMM et Stock Disponible par province",
-        xaxis_title="Province",
-        yaxis_title="Quantité",
-        barmode='group',
-        height=500,
-        xaxis={'tickangle': 45}
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-# ============================================================================
 # APPLICATION PRINCIPALE
 # ============================================================================
 
@@ -1783,15 +2083,14 @@ def main():
         # KPI principaux
         show_kpi_cards(df_filtered, niveau)
         
-        # Onglets
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        # Onglets (6 onglets maintenant)
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📈 Dépistage & Diagnostic",
             "💊 Traitement",
             "🛡️ Prévention (TPT)",
-            "📦 Logistique",
             "📊 Complétude & Promptitude",
             "📋 Données brutes",
-            "🏭 Stocks par Province"
+            "💊 Gestion des Médicaments"
         ])
         
         with tab1:
@@ -1801,13 +2100,11 @@ def main():
         with tab3:
             show_prevention_tab(df_filtered)
         with tab4:
-            show_logistique_tab(df_filtered)
-        with tab5:
             show_completude_promptitude_tab(df_filtered, niveau, province_selectionne, zone_sante_selectionne)
-        with tab6:
+        with tab5:
             show_donnees_brutes_tab(df_filtered)
-        with tab7:
-            show_stocks_province_tab(df)
+        with tab6:
+            show_medicaments_tab(df_filtered)
         
         st.markdown("---")
         st.markdown(f"*Dernière mise à jour : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
