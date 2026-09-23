@@ -258,7 +258,6 @@ COLONNES_MEDICAMENTS = ['stock_initial', 'quantite_recue', 'stock_disponible',
                         'quantite_consomme', 'stock_theorique', 'stock_physique',
                         'pertes_exp', 'jours_rupture', 'date_expiration']
 
-# Types de niveaux pour la distribution
 TYPES_NIVEAUX = ['National', 'CDR', 'Zone de Santé']
 
 # ============================================================================
@@ -938,11 +937,9 @@ def show_prevention_tab(df_filtered):
 # ============================================================================
 
 def get_semaines_annee(annee):
-    """Génère les semaines d'une année"""
     semaines = []
     for i in range(1, 53):
         try:
-            # Semaine ISO
             lundi = pd.Timestamp.fromisocalendar(annee, i, 1)
             dimanche = lundi + pd.Timedelta(days=6)
             semaines.append({
@@ -957,7 +954,6 @@ def get_semaines_annee(annee):
 
 
 def load_distribution_data():
-    """Charge les données de distribution des médicaments"""
     try:
         df_dist = pd.read_csv('distribution_medicaments.csv')
         df_dist['date_saisie'] = pd.to_datetime(df_dist['date_saisie'], errors='coerce')
@@ -979,13 +975,11 @@ def load_distribution_data():
 
 
 def save_distribution_data(df_dist):
-    """Sauvegarde les données de distribution"""
     df_to_save = df_dist.drop(columns=['semaine_num', 'annee', 'mois_annee'], errors='ignore')
     df_to_save.to_csv('distribution_medicaments.csv', index=False)
 
 
 def show_medicaments_tab(df_filtered):
-    """Onglet Gestion des Médicaments - Version avec suivi de distribution"""
     st.subheader("💊 Gestion des stocks de médicaments")
     
     medicaments_presents = []
@@ -998,7 +992,6 @@ def show_medicaments_tab(df_filtered):
         st.warning("⚠️ Aucune donnée de médicaments trouvée dans le fichier.")
         return
     
-    # ===== TABLEAU DES STOCKS (KPI et alertes supprimés) =====
     st.markdown("### 📋 État des stocks par médicament")
     
     data_stocks = []
@@ -1147,31 +1140,24 @@ def show_medicaments_tab(df_filtered):
             else:
                 st.success("✅ Aucun CDT en rupture de stock")
     
-    # ============================================================
-    # SECTION DISTRIBUTION (remplace les Alertes stock)
-    # ============================================================
     st.markdown("---")
     st.subheader("📤 Suivi de distribution des médicaments")
     st.markdown("**Suivi hebdomadaire** de la distribution : National → CDR → Zone de Santé")
     
     df_dist = load_distribution_data()
     
-    # ===== FORMULAIRE DE SAISIE =====
     with st.expander("📝 **Ajouter / Modifier une entrée de distribution**", expanded=False):
         with st.form("form_distribution", clear_on_submit=True):
             col1, col2 = st.columns(2)
             
             with col1:
-                # Sélection de l'année
                 annee_courante = datetime.now().year
                 annee_options = [annee_courante - 1, annee_courante, annee_courante + 1]
                 annee_dist = st.selectbox("📅 Année", options=annee_options, index=1, key="annee_dist")
                 
-                # Générer les semaines pour l'année
                 semaines = get_semaines_annee(annee_dist)
                 semaine_options = [s['label'] for s in semaines]
                 
-                # Sélectionner la semaine actuelle par défaut
                 semaine_actuelle = datetime.now().isocalendar()[1]
                 index_defaut = min(semaine_actuelle - 1, len(semaine_options) - 1) if semaine_actuelle > 0 else 0
                 
@@ -1197,39 +1183,34 @@ def show_medicaments_tab(df_filtered):
                 code_entite = st.text_input(
                     "🔢 Code entité",
                     value="",
-                    placeholder="Ex: CDR-001, ZS-012, NAT",
-                    help="Code unique de l'entité (optionnel)"
+                    placeholder="Ex: CDR-001, ZS-012, NAT"
                 )
                 
                 nom_entite = st.text_input(
                     "🏥 Nom de l'entité",
                     value="",
-                    placeholder="Ex: CDR Kinshasa, ZS Bandalungwa, National",
-                    help="Nom de l'entité concernée"
+                    placeholder="Ex: CDR Kinshasa, ZS Bandalungwa, National"
                 )
                 
                 quantite_prevue = st.number_input(
                     "📋 Quantité prévue",
                     min_value=0,
                     value=0,
-                    step=100,
-                    help="Quantité prévue à expédier/recevoir"
+                    step=100
                 )
                 
                 quantite_expediee = st.number_input(
                     "📤 Quantité expédiée",
                     min_value=0,
                     value=0,
-                    step=100,
-                    help="Quantité réellement expédiée"
+                    step=100
                 )
                 
                 quantite_recue = st.number_input(
                     "📥 Quantité reçue",
                     min_value=0,
                     value=0,
-                    step=100,
-                    help="Quantité réellement reçue"
+                    step=100
                 )
             
             observations = st.text_area("📝 Observations", value="", height=80)
@@ -1268,11 +1249,9 @@ def show_medicaments_tab(df_filtered):
         st.info("📋 Aucune donnée de distribution n'est encore enregistrée. Utilisez le formulaire ci-dessus pour ajouter la première entrée.")
         return
     
-    # ===== KPI DE DISTRIBUTION =====
     st.markdown("---")
     st.markdown("### 📊 Indicateurs de distribution")
     
-    # Calculs globaux
     total_prevu = df_dist['quantite_prevue'].sum()
     total_expedie = df_dist['quantite_expediee'].sum()
     total_recu = df_dist['quantite_recue'].sum()
@@ -1305,7 +1284,6 @@ def show_medicaments_tab(df_filtered):
         st.metric("⚖️ Écart Expédié/Reçu", f"{int(abs(ecart_global)):,}",
                  delta=delta_ecart, delta_color=color_ecart)
     
-    # ===== TABLEAU PAR NIVEAU =====
     st.markdown("---")
     st.markdown("### 📋 Suivi par niveau de distribution")
     
@@ -1314,7 +1292,6 @@ def show_medicaments_tab(df_filtered):
     with tab_nat:
         df_nat = df_dist[df_dist['type_niveau'] == 'National'].copy()
         if len(df_nat) > 0:
-            # Grouper par CDR destinataire
             df_nat_grouped = df_nat.groupby(['nom_entite', 'medicament']).agg({
                 'quantite_prevue': 'sum',
                 'quantite_expediee': 'sum',
@@ -1405,7 +1382,6 @@ def show_medicaments_tab(df_filtered):
         else:
             st.info("Aucune donnée de réception Zone de Santé pour le moment.")
     
-    # ===== EXPORT =====
     st.markdown("---")
     col_exp1, col_exp2 = st.columns(2)
     with col_exp1:
@@ -1423,14 +1399,12 @@ def show_medicaments_tab(df_filtered):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     
-    # ===== GRAPHIQUES =====
     st.markdown("---")
     st.markdown("### 📊 Visualisation de la distribution")
     
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
-        # Graphique : Prévision vs Expédié vs Reçu par médicament
         df_med = df_dist.groupby('medicament').agg({
             'quantite_prevue': 'sum',
             'quantite_expediee': 'sum',
@@ -1455,7 +1429,6 @@ def show_medicaments_tab(df_filtered):
         st.plotly_chart(fig_med, use_container_width=True)
     
     with col_g2:
-        # Graphique : Évolution temporelle
         if 'semaine' in df_dist.columns:
             df_time = df_dist.groupby('semaine').agg({
                 'quantite_prevue': 'sum',
@@ -1484,7 +1457,6 @@ def show_medicaments_tab(df_filtered):
             )
             st.plotly_chart(fig_time, use_container_width=True)
     
-    # ===== TABLEAU DÉTAILLÉ =====
     st.markdown("---")
     with st.expander("📜 **Voir le détail de toutes les entrées**", expanded=False):
         df_detail = df_dist.copy()
@@ -1606,7 +1578,8 @@ def show_summary_province(df):
             elif col not in ['Province', 'Performance']:
                 df_affichage[col] = df_affichage[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "0")
         
-        styled_df = df_affichage.style.applymap(colorer_taux, subset=['Taux_ZS', 'Taux_CDT'])
+        # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
+        styled_df = df_affichage.style.map(colorer_taux, subset=['Taux_ZS', 'Taux_CDT'])
         
         st.dataframe(styled_df, use_container_width=True, height=400)
         
@@ -2297,7 +2270,8 @@ def show_finances_tab(df_main):
         for col in ['Prévision mensuelle ($)', 'Dépenses réelles ($)', 'Écart ($)']:
             df_mensuel_display[col] = df_mensuel_display[col].apply(lambda x: f"${x:,.2f}")
         
-        styled_mensuel = df_mensuel_display.style.applymap(colorer_statut, subset=['Statut'])
+        # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
+        styled_mensuel = df_mensuel_display.style.map(colorer_statut, subset=['Statut'])
         st.dataframe(styled_mensuel, use_container_width=True, height=400)
         
         col1_export, col2_export = st.columns(2)
@@ -2366,7 +2340,8 @@ def show_finances_tab(df_main):
             for col in ['Prévision hebdo ($)', 'Dépenses réelles ($)', 'Écart ($)']:
                 df_hebdo_display[col] = df_hebdo_display[col].apply(lambda x: f"${x:,.2f}")
             
-            styled_hebdo = df_hebdo_display.style.applymap(colorer_statut, subset=['Statut'])
+            # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
+            styled_hebdo = df_hebdo_display.style.map(colorer_statut, subset=['Statut'])
             st.dataframe(styled_hebdo, use_container_width=True, height=500)
             
             col1_export, col2_export = st.columns(2)
