@@ -9,3 +9,4 @@ scipy
 matplotlib
 seaborn
 pybase64
+st-gsheets-connection
