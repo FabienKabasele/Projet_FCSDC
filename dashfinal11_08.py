@@ -92,8 +92,8 @@ st.markdown('<div class="main-header"><h1>🩺 Stop TB - Tableau de Bord FCSDS</
 # ============================================================================
 
 PROJET_CONFIG = {
-    'budget_total': 500000,
-    'date_debut': '2026-06-01',
+    'budget_total': 5400000,
+    'date_debut': '2026-06-15',
     'date_fin': '2027-03-31',
     'nom_projet': 'Stop TB - FCSDS'
 }
