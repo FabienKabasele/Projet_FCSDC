@@ -60,27 +60,6 @@ st.markdown("""
         text-align: center;
         font-weight: bold;
     }
-    .status-ok {
-        background-color: #d4edda;
-        color: #155724;
-        padding: 0.2rem 0.5rem;
-        border-radius: 5px;
-        font-weight: bold;
-    }
-    .status-warning {
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 0.2rem 0.5rem;
-        border-radius: 5px;
-        font-weight: bold;
-    }
-    .status-danger {
-        background-color: #f8d7da;
-        color: #721c24;
-        padding: 0.2rem 0.5rem;
-        border-radius: 5px;
-        font-weight: bold;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -92,8 +71,8 @@ st.markdown('<div class="main-header"><h1>🩺 Stop TB - Tableau de Bord FCSDS</
 # ============================================================================
 
 PROJET_CONFIG = {
-    'budget_total': 5400000,
-    'date_debut': '2026-06-15',
+    'budget_total': 500000,
+    'date_debut': '2026-06-01',
     'date_fin': '2027-03-31',
     'nom_projet': 'Stop TB - FCSDS'
 }
@@ -618,7 +597,6 @@ def load_finances_data():
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_fin = conn.read(worksheet="finances", ttl=0)
         
-        # Nettoyer les colonnes vides
         df_fin = df_fin.dropna(how='all')
         
         if len(df_fin) == 0:
@@ -628,14 +606,12 @@ def load_finances_data():
                 'observations', 'mois_num', 'annee', 'mois_annee', 'semaine_num'
             ])
         
-        # Conversion des dates
         df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
         df_fin['mois_num'] = df_fin['date_saisie'].dt.month
         df_fin['annee'] = df_fin['date_saisie'].dt.year
         df_fin['mois_annee'] = df_fin['date_saisie'].dt.strftime('%Y-%m')
         df_fin['semaine_num'] = df_fin['date_saisie'].dt.isocalendar().week
         
-        # S'assurer que les colonnes existent
         if 'type_suivi' not in df_fin.columns:
             df_fin['type_suivi'] = 'mensuel'
         
@@ -730,6 +706,61 @@ def save_distribution_data(df_dist):
     except Exception as e:
         st.error(f"❌ Erreur de sauvegarde vers Google Sheets (distribution): {e}")
         return False
+
+
+# ============================================================================
+# CHARGEMENT DU BUDGET PRÉVISIONNEL
+# ============================================================================
+
+@st.cache_data
+def load_budget_previsionnel():
+    """Charge le budget prévisionnel par province et par mois depuis le CSV"""
+    try:
+        df_budget = pd.read_csv('budget_previsionnel.csv')
+        
+        # Renommer la première colonne en 'province_name'
+        df_budget = df_budget.rename(columns={df_budget.columns[0]: 'province_name'})
+        
+        # Supprimer la colonne 'Montant total' (on va la recalculer)
+        if 'Montant total' in df_budget.columns:
+            df_budget = df_budget.drop(columns=['Montant total'])
+        
+        # Supprimer la dernière ligne 'Total budget'
+        df_budget = df_budget[df_budget['province_name'] != 'Total budget']
+        df_budget = df_budget[df_budget['province_name'].notna()]
+        
+        # Nettoyer les noms de provinces
+        df_budget['province_name'] = df_budget['province_name'].apply(clean_province_name)
+        
+        # Remplacer les valeurs vides par 0
+        for col in df_budget.columns:
+            if col != 'province_name':
+                df_budget[col] = pd.to_numeric(df_budget[col], errors='coerce').fillna(0)
+        
+        # Calculer le montant total par province
+        colonnes_mois = [c for c in df_budget.columns if c != 'province_name']
+        df_budget['budget_total_province'] = df_budget[colonnes_mois].sum(axis=1)
+        
+        # Convertir en format long pour faciliter les calculs mensuels
+        df_budget_long = df_budget.melt(
+            id_vars=['province_name'],
+            value_vars=colonnes_mois,
+            var_name='mois',
+            value_name='montant_prevu'
+        )
+        
+        # Extraire l'année-mois pour le matching
+        df_budget_long['mois_str'] = df_budget_long['mois'].apply(
+            lambda x: pd.to_datetime(x, errors='coerce').strftime('%Y-%m') 
+            if pd.notna(pd.to_datetime(x, errors='coerce')) else None
+        )
+        
+        return df_budget, df_budget_long
+    except FileNotFoundError:
+        return pd.DataFrame(), pd.DataFrame()
+    except Exception as e:
+        st.error(f"❌ Erreur de chargement du budget : {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
 
 # ============================================================================
@@ -1280,9 +1311,7 @@ def show_medicaments_tab(df_filtered):
     st.subheader("📤 Suivi de distribution des médicaments")
     st.markdown("**Suivi hebdomadaire** de la distribution : National → CDR → Zone de Santé")
     
-    # ========== PROTECTION PAR MOT DE PASSE ==========
     if st.session_state.get('auth_saisie_distribution', False):
-        # Bouton de déconnexion
         if st.button("🚪 Se déconnecter du formulaire", key="logout_distribution"):
             st.session_state['auth_saisie_distribution'] = False
             st.rerun()
@@ -1310,16 +1339,8 @@ def show_medicaments_tab(df_filtered):
                     
                     date_saisie = semaine_selectionnee['fin']
                     
-                    type_niveau = st.selectbox(
-                        "🏢 Niveau de distribution",
-                        options=TYPES_NIVEAUX
-                    )
-                    
-                    medicament_dist = st.selectbox(
-                        "💊 Médicament",
-                        options=list(MEDICAMENTS.keys()),
-                        key="med_dist"
-                    )
+                    type_niveau = st.selectbox("🏢 Niveau de distribution", options=TYPES_NIVEAUX)
+                    medicament_dist = st.selectbox("💊 Médicament", options=list(MEDICAMENTS.keys()), key="med_dist")
                 
                 with col2:
                     code_entite = st.text_input("🔢 Code entité", value="", placeholder="Ex: CDR-001, ZS-012")
@@ -1358,7 +1379,6 @@ def show_medicaments_tab(df_filtered):
         st.info("🔐 **Formulaire protégé** - Veuillez vous authentifier pour saisir des données")
         check_password('saisie_distribution', 'saisie_distribution')
     
-    # Affichage des données de distribution (toujours visible)
     st.markdown("---")
     df_dist_display = load_distribution_data()
     
@@ -1668,7 +1688,6 @@ def show_summary_province(df):
             elif col not in ['Province', 'Performance']:
                 df_affichage[col] = df_affichage[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "0")
         
-        # Utilisation de .map() au lieu de .applymap() pour compatibilité pandas 3.0
         styled_df = df_affichage.style.map(colorer_taux, subset=['Taux_ZS', 'Taux_CDT'])
         
         st.dataframe(styled_df, use_container_width=True, height=400)
@@ -1922,7 +1941,351 @@ def show_performance_graphs(completeness):
 
 
 # ============================================================================
-# ONGLET FINANCES (PROTÉGÉ + GOOGLE SHEETS)
+# SUIVI BUDGÉTAIRE PAR PROVINCE
+# ============================================================================
+
+def show_finances_par_province(df_fin, budget_total):
+    """Affiche le suivi budgétaire par province basé sur le budget prévisionnel réel"""
+    
+    st.markdown("---")
+    st.markdown("### 📊 Suivi budgétaire par province")
+    
+    df_budget, df_budget_long = load_budget_previsionnel()
+    
+    if len(df_budget) == 0:
+        st.warning("⚠️ Fichier `budget_previsionnel.csv` non trouvé ou vide.")
+        st.info("""
+        **Pour utiliser cette fonctionnalité :**
+        1. Enregistrez votre fichier Excel de budget en CSV : `budget_previsionnel.csv`
+        2. Placez-le à la racine du projet
+        3. Le fichier sera lu automatiquement
+        """)
+        return
+    
+    df_budget_prov = df_budget[['province_name', 'budget_total_province']].copy()
+    df_budget_prov.columns = ['Province', 'Budget_prevu']
+    
+    df_fin_province = df_fin[df_fin['province_name'] != 'Toutes'].copy()
+    df_fin_province = df_fin_province[df_fin_province['province_name'].notna()]
+    df_fin_province = df_fin_province[df_fin_province['province_name'] != '']
+    
+    if 'depenses' in df_fin_province.columns and len(df_fin_province) > 0:
+        depenses_par_province = df_fin_province.groupby('province_name').agg({
+            'depenses': 'sum'
+        }).reset_index()
+        depenses_par_province.columns = ['Province', 'Depenses_reelles']
+    else:
+        depenses_par_province = pd.DataFrame(columns=['Province', 'Depenses_reelles'])
+    
+    df_province = df_budget_prov.merge(
+        depenses_par_province, 
+        on='Province', 
+        how='left'
+    )
+    
+    df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
+    df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
+    df_province['Taux_absorption'] = np.where(
+        df_province['Budget_prevu'] > 0,
+        (df_province['Depenses_reelles'] / df_province['Budget_prevu'] * 100).round(1),
+        0
+    )
+    
+    def statut_province(taux):
+        if taux >= 90:
+            return '🟢 Excellent'
+        elif taux >= 80:
+            return '💧 Bon'
+        elif taux >= 50:
+            return '🟡 Moyen'
+        elif taux > 0:
+            return '🔴 Faible'
+        else:
+            return '⚪ Aucune dépense'
+    
+    df_province['Statut'] = df_province['Taux_absorption'].apply(statut_province)
+    
+    df_affichage = df_province[[
+        'Province', 'Budget_prevu', 'Depenses_reelles',
+        'Reste_a_depenser', 'Taux_absorption', 'Statut'
+    ]].copy()
+    
+    df_affichage.columns = [
+        'Province', 'Budget prévu ($)', 'Dépenses réelles ($)',
+        'Reste à dépenser ($)', 'Taux absorption (%)', 'Statut'
+    ]
+    
+    df_affichage['Budget prévu ($)'] = df_affichage['Budget prévu ($)'].apply(lambda x: f"${x:,.2f}")
+    df_affichage['Dépenses réelles ($)'] = df_affichage['Dépenses réelles ($)'].apply(lambda x: f"${x:,.2f}")
+    df_affichage['Reste à dépenser ($)'] = df_affichage['Reste à dépenser ($)'].apply(lambda x: f"${x:,.2f}")
+    df_affichage['Taux absorption (%)'] = df_affichage['Taux absorption (%)'].apply(lambda x: f"{x:.1f}%")
+    
+    budget_total_reel = df_province['Budget_prevu'].sum()
+    depenses_total_reel = df_province['Depenses_reelles'].sum()
+    reste_total = budget_total_reel - depenses_total_reel
+    taux_global = (depenses_total_reel / budget_total_reel * 100) if budget_total_reel > 0 else 0
+    
+    total_row = pd.DataFrame([{
+        'Province': '**TOTAL**',
+        'Budget prévu ($)': f"${budget_total_reel:,.2f}",
+        'Dépenses réelles ($)': f"${depenses_total_reel:,.2f}",
+        'Reste à dépenser ($)': f"${reste_total:,.2f}",
+        'Taux absorption (%)': f"{taux_global:.1f}%",
+        'Statut': '📊 Bilan'
+    }])
+    
+    df_affichage_final = pd.concat([df_affichage, total_row], ignore_index=True)
+    
+    def colorer_ligne(row):
+        taux_str = str(row['Taux absorption (%)'])
+        try:
+            taux = float(taux_str.replace('%', ''))
+            if taux >= 90:
+                return ['background-color: #d4edda; color: #155724;'] * len(row)
+            elif taux >= 80:
+                return ['background-color: #d1ecf1; color: #0c5460;'] * len(row)
+            elif taux >= 50:
+                return ['background-color: #fff3cd; color: #856404;'] * len(row)
+            elif taux > 0:
+                return ['background-color: #f8d7da; color: #721c24;'] * len(row)
+            else:
+                return ['background-color: #f0f2f6; color: #6c757d;'] * len(row)
+        except:
+            return [''] * len(row)
+    
+    styled_df = df_affichage_final.style.apply(colorer_ligne, axis=1)
+    
+    st.dataframe(styled_df, use_container_width=True, height=450)
+    
+    depenses_totales = df_fin['depenses'].sum()
+    depenses_par_province_total = df_fin_province['depenses'].sum() if len(df_fin_province) > 0 else 0
+    depenses_non_affectees = depenses_totales - depenses_par_province_total
+    
+    if depenses_non_affectees > 0:
+        st.info(f"""
+        ℹ️ **Dépenses non affectées à une province** : ${depenses_non_affectees:,.2f}
+        
+        Ces dépenses ont été saisies avec la province **"Toutes"**. Pour les ventiler,
+        saisissez les dépenses avec le nom de la province concernée.
+        """)
+    
+    st.markdown("### 📈 Synthèse par province")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    nb_provinces_bonnes = len(df_province[df_province['Taux_absorption'] >= 80])
+    nb_provinces_moyennes = len(df_province[(df_province['Taux_absorption'] >= 50) & (df_province['Taux_absorption'] < 80)])
+    nb_provinces_faibles = len(df_province[(df_province['Taux_absorption'] > 0) & (df_province['Taux_absorption'] < 50)])
+    nb_provinces_vides = len(df_province[df_province['Taux_absorption'] == 0])
+    
+    with col1:
+        st.metric("🟢 Provinces ≥ 80%", f"{nb_provinces_bonnes}/{len(df_province)}")
+    with col2:
+        st.metric("🟡 Provinces 50-79%", f"{nb_provinces_moyennes}/{len(df_province)}")
+    with col3:
+        st.metric("🔴 Provinces < 50%", f"{nb_provinces_faibles}/{len(df_province)}")
+    with col4:
+        st.metric("⚪ Sans dépense", f"{nb_provinces_vides}/{len(df_province)}")
+    
+    st.markdown("### 📊 Visualisation du budget par province")
+    
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        df_graph = df_province[df_province['Budget_prevu'] > 0].copy()
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=df_graph['Province'],
+            y=df_graph['Budget_prevu'],
+            name='Budget prévu',
+            marker_color='#1f77b4',
+            text=df_graph['Budget_prevu'].apply(lambda x: f"${x:,.0f}"),
+            textposition='outside'
+        ))
+        fig.add_trace(go.Bar(
+            x=df_graph['Province'],
+            y=df_graph['Depenses_reelles'],
+            name='Dépenses réelles',
+            marker_color='#ff7f0e',
+            text=df_graph['Depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
+            textposition='outside'
+        ))
+        fig.update_layout(
+            title='Budget prévu vs Dépenses réelles par province',
+            xaxis_title='Province',
+            yaxis_title='Montant ($)',
+            barmode='group',
+            height=450,
+            xaxis_tickangle=45,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col_g2:
+        df_taux = df_province[df_province['Budget_prevu'] > 0].copy()
+        df_taux = df_taux.sort_values('Taux_absorption', ascending=True)
+        
+        fig_taux = go.Figure()
+        fig_taux.add_trace(go.Bar(
+            x=df_taux['Taux_absorption'],
+            y=df_taux['Province'],
+            orientation='h',
+            marker_color=df_taux['Taux_absorption'].apply(
+                lambda x: '#28a745' if x >= 90 
+                else '#17becf' if x >= 80 
+                else '#ffc107' if x >= 50 
+                else '#dc3545'
+            ),
+            text=df_taux['Taux_absorption'].apply(lambda x: f"{x:.1f}%"),
+            textposition='outside'
+        ))
+        fig_taux.update_layout(
+            title="Taux d'absorption par province (%)",
+            xaxis_title="Taux d'absorption (%)",
+            yaxis_title="",
+            height=450,
+            xaxis_range=[0, 120],
+            showlegend=False
+        )
+        fig_taux.add_vline(x=80, line_dash="dash", line_color="green", 
+                          annotation_text="Cible 80%")
+        st.plotly_chart(fig_taux, use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("### 📅 Suivi budgétaire mensuel par province")
+    st.markdown("Comparaison du **budget prévu mensuel** vs **dépenses réelles** pour chaque province")
+    
+    provinces_disponibles = sorted(df_province['Province'].dropna().unique().tolist())
+    province_selectionnee = st.selectbox(
+        "Sélectionnez une province pour voir le détail mensuel",
+        options=provinces_disponibles,
+        key="select_province_finance"
+    )
+    
+    if province_selectionnee:
+        df_budget_prov_mois = df_budget_long[
+            df_budget_long['province_name'] == province_selectionnee
+        ].copy()
+        
+        df_dep_prov = df_fin[
+            (df_fin['province_name'] == province_selectionnee) & 
+            (df_fin['type_suivi'] == 'mensuel')
+        ].copy() if 'type_suivi' in df_fin.columns else df_fin[
+            df_fin['province_name'] == province_selectionnee
+        ].copy()
+        
+        if len(df_dep_prov) > 0 and 'mois_annee' in df_dep_prov.columns:
+            depenses_par_mois = df_dep_prov.groupby('mois_annee').agg({
+                'depenses': 'sum'
+            }).reset_index()
+            depenses_par_mois.columns = ['mois_str', 'depenses_reelles']
+        else:
+            depenses_par_mois = pd.DataFrame(columns=['mois_str', 'depenses_reelles'])
+        
+        df_suivi_mois = df_budget_prov_mois.merge(
+            depenses_par_mois,
+            on='mois_str',
+            how='left'
+        )
+        
+        df_suivi_mois['depenses_reelles'] = df_suivi_mois['depenses_reelles'].fillna(0)
+        df_suivi_mois['ecart'] = df_suivi_mois['montant_prevu'] - df_suivi_mois['depenses_reelles']
+        df_suivi_mois['taux'] = np.where(
+            df_suivi_mois['montant_prevu'] > 0,
+            (df_suivi_mois['depenses_reelles'] / df_suivi_mois['montant_prevu'] * 100).round(1),
+            0
+        )
+        
+        df_suivi_mois = df_suivi_mois.sort_values('mois_str')
+        
+        df_suivi_display = df_suivi_mois[['mois_str', 'montant_prevu', 'depenses_reelles', 'ecart', 'taux']].copy()
+        df_suivi_display.columns = ['Mois', 'Budget prévu ($)', 'Dépenses réelles ($)', 'Écart ($)', 'Taux (%)']
+        
+        for col in ['Budget prévu ($)', 'Dépenses réelles ($)', 'Écart ($)']:
+            df_suivi_display[col] = df_suivi_display[col].apply(lambda x: f"${x:,.2f}")
+        
+        df_suivi_display['Taux (%)'] = df_suivi_display['Taux (%)'].apply(lambda x: f"{x:.1f}%")
+        
+        st.dataframe(df_suivi_display, use_container_width=True, height=400)
+        
+        col_gm1, col_gm2 = st.columns(2)
+        
+        with col_gm1:
+            fig_mois = go.Figure()
+            fig_mois.add_trace(go.Bar(
+                x=df_suivi_mois['mois_str'],
+                y=df_suivi_mois['montant_prevu'],
+                name='Budget prévu',
+                marker_color='#1f77b4',
+                text=df_suivi_mois['montant_prevu'].apply(lambda x: f"${x:,.0f}"),
+                textposition='outside'
+            ))
+            fig_mois.add_trace(go.Bar(
+                x=df_suivi_mois['mois_str'],
+                y=df_suivi_mois['depenses_reelles'],
+                name='Dépenses réelles',
+                marker_color='#ff7f0e',
+                text=df_suivi_mois['depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
+                textposition='outside'
+            ))
+            fig_mois.update_layout(
+                title=f'Budget prévu vs Dépenses - {province_selectionnee}',
+                xaxis_title='Mois',
+                yaxis_title='Montant ($)',
+                barmode='group',
+                height=400,
+                xaxis_tickangle=45
+            )
+            st.plotly_chart(fig_mois, use_container_width=True)
+        
+        with col_gm2:
+            fig_taux_mois = go.Figure()
+            fig_taux_mois.add_trace(go.Bar(
+                x=df_suivi_mois['mois_str'],
+                y=df_suivi_mois['taux'],
+                marker_color=df_suivi_mois['taux'].apply(
+                    lambda x: '#28a745' if x >= 90 
+                    else '#17becf' if x >= 80 
+                    else '#ffc107' if x >= 50 
+                    else '#dc3545'
+                ),
+                text=df_suivi_mois['taux'].apply(lambda x: f"{x:.0f}%"),
+                textposition='outside'
+            ))
+            fig_taux_mois.update_layout(
+                title=f"Taux d'absorption mensuel - {province_selectionnee}",
+                xaxis_title='Mois',
+                yaxis_title='Taux (%)',
+                height=400,
+                xaxis_tickangle=45,
+                yaxis_range=[0, 120],
+                showlegend=False
+            )
+            fig_taux_mois.add_hline(y=100, line_dash="dash", line_color="green", 
+                                    annotation_text="Cible 100%")
+            st.plotly_chart(fig_taux_mois, use_container_width=True)
+    
+    st.markdown("---")
+    col_export1, col_export2 = st.columns(2)
+    with col_export1:
+        st.download_button(
+            label="📥 Télécharger le suivi par province (CSV)",
+            data=df_affichage_final.to_csv(index=False).encode('utf-8'),
+            file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    with col_export2:
+        st.download_button(
+            label="📥 Télécharger le suivi par province (Excel)",
+            data=to_excel(df_affichage_final),
+            file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+
+# ============================================================================
+# ONGLET FINANCES
 # ============================================================================
 
 def get_mois_projet():
@@ -1958,7 +2321,6 @@ def get_semaines_du_mois(mois):
 def show_finances_tab(df_main):
     """Onglet Finances - Protégé par mot de passe + Google Sheets"""
     
-    # ========== PROTECTION PAR MOT DE PASSE ==========
     if not st.session_state.get('auth_consultation_finances', False):
         st.markdown("""
             <div style="background-color: #f8d7da; padding: 2rem; border-radius: 10px; border-left: 5px solid #dc3545; margin-bottom: 1rem; text-align: center;">
@@ -1990,14 +2352,12 @@ def show_finances_tab(df_main):
         
         return
     
-    # ========== BOUTON DE DÉCONNEXION ==========
     col_logout1, col_logout2 = st.columns([4, 1])
     with col_logout2:
         if st.button("🚪 Se déconnecter", key="logout_finances", use_container_width=True):
             st.session_state['auth_consultation_finances'] = False
             st.rerun()
     
-    # ========== CONTENU ==========
     st.subheader("💰 Tableau de bord financier du projet")
     
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
@@ -2030,12 +2390,6 @@ def show_finances_tab(df_main):
                 <td><strong>{budget_total:,.0f} USD</strong></td>
                 <td><strong>Durée :</strong></td>
                 <td>{nb_mois_total} mois ({nb_semaines_total} semaines)</td>
-            </tr>
-            <tr>
-                <td><strong>Prévision mensuelle :</strong></td>
-                <td><strong>{prevision_mensuelle:,.2f} USD</strong></td>
-                <td><strong>Prévision hebdomadaire :</strong></td>
-                <td><strong>{prevision_hebdo:,.2f} USD</strong></td>
             </tr>
         </table>
     </div>
@@ -2079,8 +2433,6 @@ def show_finances_tab(df_main):
                     cle_mois = mois_selectionne.strftime('%Y-%m')
                     type_enregistrement = 'mensuel'
                     
-                    st.info(f"📅 Saisie mensuelle pour : **{mois_selectionne_str}**")
-                    
                 else:
                     mois_options_str = [m.strftime('%B %Y') for m in mois_projet]
                     mois_selectionne_str = st.selectbox(
@@ -2108,8 +2460,6 @@ def show_finances_tab(df_main):
                     depenses_default = prevision_hebdo
                     cle_mois = f"{mois_selectionne.strftime('%Y-%m')}-S{semaine_selectionnee['numero']}"
                     type_enregistrement = 'hebdomadaire'
-                    
-                    st.info(f"📆 Saisie hebdomadaire : **{semaine_selectionnee_label}**")
                 
                 depenses = st.number_input(
                     depenses_label,
@@ -2120,7 +2470,7 @@ def show_finances_tab(df_main):
                 )
                 
                 province = st.selectbox(
-                    "🌍 Province (optionnel)",
+                    "🌍 Province",
                     options=['Toutes'] + sorted(df_main['province_name'].dropna().unique().tolist())
                 )
             
@@ -2176,7 +2526,7 @@ def show_finances_tab(df_main):
                     st.rerun()
     
     if len(df_fin) == 0:
-        st.info("📋 Aucune donnée financière n'est encore enregistrée. Utilisez le formulaire ci-dessus.")
+        st.info("📋 Aucune donnée financière n'est encore enregistrée.")
         return
     
     df_fin_mensuel = df_fin[df_fin.get('type_suivi', 'mensuel') == 'mensuel'].copy() if 'type_suivi' in df_fin.columns else df_fin.copy()
@@ -2294,6 +2644,9 @@ def show_finances_tab(df_main):
         st.metric("📊 Taux traitement DP", f"{taux_traitement_dp:.1f}%",
                  delta=delta_dp, delta_color=color_dp)
     
+    # ========== NOUVEAU : Suivi budgétaire par province ==========
+    show_finances_par_province(df_fin, budget_total)
+    
     st.markdown("---")
     
     def colorer_statut(val):
@@ -2370,7 +2723,7 @@ def show_finances_tab(df_main):
         st.markdown("### 📆 Suivi hebdomadaire du budget")
         
         if len(df_fin_hebdo) == 0:
-            st.info("📋 Aucune saisie hebdomadaire pour le moment. Utilisez le formulaire ci-dessus.")
+            st.info("📋 Aucune saisie hebdomadaire pour le moment.")
         else:
             data_hebdo = []
             for mois in mois_projet:
@@ -2434,101 +2787,6 @@ def show_finances_tab(df_main):
                     file_name=f"suivi_hebdomadaire_budget_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-    
-    st.markdown("---")
-    st.markdown("### 📊 Visualisation de l'absorption budgétaire")
-    
-    if 'Mensuel' in type_suivi:
-        col_g1, col_g2 = st.columns(2)
-        
-        with col_g1:
-            df_cumul = df_mensuel.copy()
-            df_cumul['Dépenses_num'] = df_cumul['Dépenses réelles ($)'].apply(
-                lambda x: float(x.replace('$', '').replace(',', '')) if isinstance(x, str) else x
-            )
-            df_cumul['Prévision_num'] = df_cumul['Prévision mensuelle ($)'].apply(
-                lambda x: float(x.replace('$', '').replace(',', '')) if isinstance(x, str) else x
-            )
-            df_cumul['Dépenses cumulées'] = df_cumul['Dépenses_num'].cumsum()
-            df_cumul['Prévision cumulée'] = df_cumul['Prévision_num'].cumsum()
-            
-            fig_cumul = go.Figure()
-            fig_cumul.add_trace(go.Scatter(
-                x=df_cumul['Mois'], y=[budget_total] * len(df_cumul),
-                mode='lines', name='Budget total',
-                line=dict(color='#1f77b4', width=3, dash='dash')
-            ))
-            fig_cumul.add_trace(go.Scatter(
-                x=df_cumul['Mois'], y=df_cumul['Prévision cumulée'],
-                mode='lines+markers', name='Prévision cumulée',
-                line=dict(color='#17becf', width=2)
-            ))
-            fig_cumul.add_trace(go.Scatter(
-                x=df_cumul['Mois'], y=df_cumul['Dépenses cumulées'],
-                mode='lines+markers', name='Dépenses cumulées',
-                line=dict(color='#2ca02c', width=3)
-            ))
-            fig_cumul.update_layout(
-                title='Absorption du budget dans le temps',
-                xaxis_title='Mois', yaxis_title='Montant ($)',
-                height=400, xaxis_tickangle=45
-            )
-            st.plotly_chart(fig_cumul, use_container_width=True)
-        
-        with col_g2:
-            df_taux = df_mensuel.copy()
-            df_taux['Dépenses_num'] = df_taux['Dépenses réelles ($)'].apply(
-                lambda x: float(x.replace('$', '').replace(',', '')) if isinstance(x, str) else x
-            )
-            df_taux['Prévision_num'] = df_taux['Prévision mensuelle ($)'].apply(
-                lambda x: float(x.replace('$', '').replace(',', '')) if isinstance(x, str) else x
-            )
-            df_taux['Taux mensuel'] = np.where(df_taux['Prévision_num'] > 0,
-                                                df_taux['Dépenses_num'] / df_taux['Prévision_num'] * 100, 0)
-            
-            fig_taux = go.Figure()
-            fig_taux.add_trace(go.Bar(
-                x=df_taux['Mois'], y=df_taux['Taux mensuel'],
-                name='Taux mensuel', marker_color='#1f77b4',
-                text=df_taux['Taux mensuel'].apply(lambda x: f"{x:.0f}%"),
-                textposition='outside'
-            ))
-            fig_taux.update_layout(
-                title="Taux d'absorption mensuel (%)",
-                xaxis_title='Mois', yaxis_title='Taux (%)',
-                height=400, xaxis_tickangle=45, yaxis_range=[0, 120],
-                showlegend=False
-            )
-            fig_taux.add_hline(y=100, line_dash="dash", line_color="green", annotation_text="Cible 100%")
-            st.plotly_chart(fig_taux, use_container_width=True)
-    
-    st.markdown("---")
-    st.markdown("### 🔔 Alertes et recommandations")
-    
-    alertes_fin = []
-    
-    if taux_absorption_global < 50 and nb_mois_ecoules >= 3:
-        alertes_fin.append(f"🔴 **CRITIQUE** : Taux d'absorption très faible ({taux_absorption_global:.1f}%)")
-    elif taux_absorption_global < 70 and nb_mois_ecoules >= 3:
-        alertes_fin.append(f"🟡 **ATTENTION** : Taux d'absorption ({taux_absorption_global:.1f}%) en dessous de la cible")
-    elif taux_absorption_global >= 80:
-        alertes_fin.append(f"🟢 **EXCELLENT** : Taux d'absorption optimal ({taux_absorption_global:.1f}%)")
-    
-    if ecart < -20:
-        alertes_fin.append(f"🔴 **RETARD** : Écart de {ecart:.1f} points avec l'avancement temporel")
-    elif ecart > 20:
-        alertes_fin.append(f"🟠 **EN AVANCE** : Écart de {ecart:+.1f} points")
-    
-    if dp_attente_total > 20:
-        alertes_fin.append(f"🔴 **CRITIQUE** : {int(dp_attente_total)} DP en attente")
-    elif dp_attente_total > 10:
-        alertes_fin.append(f"🟡 **ATTENTION** : {int(dp_attente_total)} DP en attente")
-    
-    if alertes_fin:
-        for alerte in alertes_fin:
-            st.warning(alerte)
-    else:
-        st.success("✅ Aucune alerte financière à signaler. Le projet est sur la bonne voie !")
     
     st.markdown("---")
     with st.expander("📜 **Voir l'historique des saisies**", expanded=False):
@@ -2597,13 +2855,6 @@ def show_donnees_brutes_tab(df_filtered):
             'Nom lisible': list(COLUMN_RENAME_MAP.values())
         })
         st.dataframe(col_mapping, use_container_width=True, height=400)
-        
-        st.download_button(
-            label="📥 Télécharger le mapping (CSV)",
-            data=col_mapping.to_csv(index=False).encode('utf-8'),
-            file_name=f"mapping_colonnes_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
 
 
 # ============================================================================
