@@ -8,6 +8,7 @@ from datetime import datetime, date
 import calendar
 import io
 import re
+from streamlit_gsheets import GSheetsConnection
 
 # Configuration de la page
 st.set_page_config(
@@ -25,12 +26,6 @@ st.markdown("""
         padding: 1rem;
         border-radius: 10px;
         color: white;
-        text-align: center;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
         text-align: center;
     }
     .national-badge {
@@ -102,6 +97,49 @@ PROJET_CONFIG = {
     'date_fin': '2027-03-31',
     'nom_projet': 'Stop TB - FCSDS'
 }
+
+# ============================================================================
+# CONFIGURATION DES MOTS DE PASSE
+# ============================================================================
+
+PASSWORDS = {
+    'saisie_distribution': 'Distrib2026',
+    'consultation_finances': 'FinanceView2026',
+}
+
+def check_password(password_key, session_key=None):
+    """Vérifie le mot de passe et stocke l'état dans session_state"""
+    if session_key is None:
+        session_key = password_key
+    
+    if st.session_state.get(f'auth_{session_key}', False):
+        return True
+    
+    st.markdown("""
+        <div style="background-color: #fff3cd; padding: 1rem; border-radius: 10px; border-left: 5px solid #ffc107; margin-bottom: 1rem;">
+            <h4 style="margin-top: 0;">🔐 Accès protégé</h4>
+            <p>Veuillez saisir le mot de passe pour accéder à cette section.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    with st.form(f"login_form_{session_key}", clear_on_submit=False):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            password = st.text_input("Mot de passe", type="password", key=f"pwd_{session_key}")
+        with col2:
+            st.write("")
+            st.write("")
+            submit = st.form_submit_button("🔓 Valider", use_container_width=True)
+        
+        if submit:
+            if password == PASSWORDS.get(password_key, ''):
+                st.session_state[f'auth_{session_key}'] = True
+                st.success("✅ Authentification réussie !")
+                st.rerun()
+            else:
+                st.error("❌ Mot de passe incorrect.")
+    
+    return False
 
 # ============================================================================
 # DICTIONNAIRE DE RENOMMAGE DES COLONNES POUR L'EXPORT
@@ -571,6 +609,130 @@ def get_previous_period_df(df, type_periode, mois_selectionne=None, annee_select
     return df_previous
 
 # ============================================================================
+# FONCTIONS GOOGLE SHEETS (FINANCES ET DISTRIBUTION)
+# ============================================================================
+
+def load_finances_data():
+    """Charge les données financières depuis Google Sheets"""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_fin = conn.read(worksheet="finances", ttl=0)
+        
+        # Nettoyer les colonnes vides
+        df_fin = df_fin.dropna(how='all')
+        
+        if len(df_fin) == 0:
+            return pd.DataFrame(columns=[
+                'type_suivi', 'date_saisie', 'province_name', 'depenses',
+                'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente',
+                'observations', 'mois_num', 'annee', 'mois_annee', 'semaine_num'
+            ])
+        
+        # Conversion des dates
+        df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
+        df_fin['mois_num'] = df_fin['date_saisie'].dt.month
+        df_fin['annee'] = df_fin['date_saisie'].dt.year
+        df_fin['mois_annee'] = df_fin['date_saisie'].dt.strftime('%Y-%m')
+        df_fin['semaine_num'] = df_fin['date_saisie'].dt.isocalendar().week
+        
+        # S'assurer que les colonnes existent
+        if 'type_suivi' not in df_fin.columns:
+            df_fin['type_suivi'] = 'mensuel'
+        
+        if 'depenses' not in df_fin.columns:
+            df_fin['depenses'] = 0
+        
+        for col in ['nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente']:
+            if col not in df_fin.columns:
+                df_fin[col] = 0
+            else:
+                df_fin[col] = pd.to_numeric(df_fin[col], errors='coerce').fillna(0)
+        
+        df_fin['depenses'] = pd.to_numeric(df_fin['depenses'], errors='coerce').fillna(0)
+        
+        if 'province_name' not in df_fin.columns:
+            df_fin['province_name'] = 'Toutes'
+        
+        if 'observations' not in df_fin.columns:
+            df_fin['observations'] = ''
+        
+        return df_fin
+    except Exception as e:
+        st.error(f"❌ Erreur de connexion à Google Sheets (finances): {e}")
+        return pd.DataFrame(columns=[
+            'type_suivi', 'date_saisie', 'province_name', 'depenses',
+            'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente',
+            'observations', 'mois_num', 'annee', 'mois_annee', 'semaine_num'
+        ])
+
+
+def save_finances_data(df_fin):
+    """Sauvegarde les données financières dans Google Sheets"""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_to_save = df_fin.drop(columns=['mois_num', 'annee', 'mois_annee', 'semaine_num'], errors='ignore')
+        conn.update(worksheet="finances", data=df_to_save)
+        return True
+    except Exception as e:
+        st.error(f"❌ Erreur de sauvegarde vers Google Sheets (finances): {e}")
+        return False
+
+
+def load_distribution_data():
+    """Charge les données de distribution depuis Google Sheets"""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_dist = conn.read(worksheet="distribution", ttl=0)
+        
+        df_dist = df_dist.dropna(how='all')
+        
+        if len(df_dist) == 0:
+            return pd.DataFrame(columns=[
+                'date_saisie', 'semaine', 'type_niveau', 'medicament', 'code_entite',
+                'nom_entite', 'quantite_prevue', 'quantite_expediee', 'quantite_recue',
+                'observations', 'semaine_num', 'annee', 'mois_annee'
+            ])
+        
+        df_dist['date_saisie'] = pd.to_datetime(df_dist['date_saisie'], errors='coerce')
+        df_dist['semaine_num'] = df_dist['date_saisie'].dt.isocalendar().week
+        df_dist['annee'] = df_dist['date_saisie'].dt.isocalendar().year
+        df_dist['mois_annee'] = df_dist['date_saisie'].dt.strftime('%Y-%m')
+        
+        for col in ['quantite_prevue', 'quantite_expediee', 'quantite_recue']:
+            if col in df_dist.columns:
+                df_dist[col] = pd.to_numeric(df_dist[col], errors='coerce').fillna(0)
+            else:
+                df_dist[col] = 0
+        
+        if 'code_entite' not in df_dist.columns:
+            df_dist['code_entite'] = '-'
+        
+        if 'observations' not in df_dist.columns:
+            df_dist['observations'] = ''
+        
+        return df_dist
+    except Exception as e:
+        st.error(f"❌ Erreur de connexion à Google Sheets (distribution): {e}")
+        return pd.DataFrame(columns=[
+            'date_saisie', 'semaine', 'type_niveau', 'medicament', 'code_entite',
+            'nom_entite', 'quantite_prevue', 'quantite_expediee', 'quantite_recue',
+            'observations', 'semaine_num', 'annee', 'mois_annee'
+        ])
+
+
+def save_distribution_data(df_dist):
+    """Sauvegarde les données de distribution dans Google Sheets"""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_to_save = df_dist.drop(columns=['semaine_num', 'annee', 'mois_annee'], errors='ignore')
+        conn.update(worksheet="distribution", data=df_to_save)
+        return True
+    except Exception as e:
+        st.error(f"❌ Erreur de sauvegarde vers Google Sheets (distribution): {e}")
+        return False
+
+
+# ============================================================================
 # FONCTIONS DE VISUALISATION
 # ============================================================================
 
@@ -953,32 +1115,6 @@ def get_semaines_annee(annee):
     return semaines
 
 
-def load_distribution_data():
-    try:
-        df_dist = pd.read_csv('distribution_medicaments.csv')
-        df_dist['date_saisie'] = pd.to_datetime(df_dist['date_saisie'], errors='coerce')
-        df_dist['semaine_num'] = df_dist['date_saisie'].dt.isocalendar().week
-        df_dist['annee'] = df_dist['date_saisie'].dt.isocalendar().year
-        df_dist['mois_annee'] = df_dist['date_saisie'].dt.strftime('%Y-%m')
-        
-        for col in ['quantite_prevue', 'quantite_expediee', 'quantite_recue']:
-            if col in df_dist.columns:
-                df_dist[col] = pd.to_numeric(df_dist[col], errors='coerce').fillna(0)
-        
-        return df_dist
-    except FileNotFoundError:
-        return pd.DataFrame(columns=[
-            'date_saisie', 'semaine', 'type_niveau', 'medicament', 'code_entite',
-            'nom_entite', 'quantite_prevue', 'quantite_expediee', 'quantite_recue',
-            'observations', 'semaine_num', 'annee', 'mois_annee'
-        ])
-
-
-def save_distribution_data(df_dist):
-    df_to_save = df_dist.drop(columns=['semaine_num', 'annee', 'mois_annee'], errors='ignore')
-    df_to_save.to_csv('distribution_medicaments.csv', index=False)
-
-
 def show_medicaments_tab(df_filtered):
     st.subheader("💊 Gestion des stocks de médicaments")
     
@@ -1144,343 +1280,297 @@ def show_medicaments_tab(df_filtered):
     st.subheader("📤 Suivi de distribution des médicaments")
     st.markdown("**Suivi hebdomadaire** de la distribution : National → CDR → Zone de Santé")
     
-    df_dist = load_distribution_data()
-    
-    with st.expander("📝 **Ajouter / Modifier une entrée de distribution**", expanded=False):
-        with st.form("form_distribution", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                annee_courante = datetime.now().year
-                annee_options = [annee_courante - 1, annee_courante, annee_courante + 1]
-                annee_dist = st.selectbox("📅 Année", options=annee_options, index=1, key="annee_dist")
-                
-                semaines = get_semaines_annee(annee_dist)
-                semaine_options = [s['label'] for s in semaines]
-                
-                semaine_actuelle = datetime.now().isocalendar()[1]
-                index_defaut = min(semaine_actuelle - 1, len(semaine_options) - 1) if semaine_actuelle > 0 else 0
-                
-                semaine_label = st.selectbox("📆 Semaine", options=semaine_options, index=index_defaut, key="semaine_dist")
-                semaine_idx = semaine_options.index(semaine_label)
-                semaine_selectionnee = semaines[semaine_idx]
-                
-                date_saisie = semaine_selectionnee['fin']
-                
-                type_niveau = st.selectbox(
-                    "🏢 Niveau de distribution",
-                    options=TYPES_NIVEAUX,
-                    help="National : envoi vers CDR | CDR : réception ou redistribution vers ZS | Zone de Santé : réception"
-                )
-                
-                medicament_dist = st.selectbox(
-                    "💊 Médicament",
-                    options=list(MEDICAMENTS.keys()),
-                    key="med_dist"
-                )
-            
-            with col2:
-                code_entite = st.text_input(
-                    "🔢 Code entité",
-                    value="",
-                    placeholder="Ex: CDR-001, ZS-012, NAT"
-                )
-                
-                nom_entite = st.text_input(
-                    "🏥 Nom de l'entité",
-                    value="",
-                    placeholder="Ex: CDR Kinshasa, ZS Bandalungwa, National"
-                )
-                
-                quantite_prevue = st.number_input(
-                    "📋 Quantité prévue",
-                    min_value=0,
-                    value=0,
-                    step=100
-                )
-                
-                quantite_expediee = st.number_input(
-                    "📤 Quantité expédiée",
-                    min_value=0,
-                    value=0,
-                    step=100
-                )
-                
-                quantite_recue = st.number_input(
-                    "📥 Quantité reçue",
-                    min_value=0,
-                    value=0,
-                    step=100
-                )
-            
-            observations = st.text_area("📝 Observations", value="", height=80)
-            
-            submitted = st.form_submit_button("✅ Enregistrer l'entrée", use_container_width=True)
-            
-            if submitted:
-                if not nom_entite:
-                    st.error("⚠️ Veuillez renseigner le nom de l'entité.")
-                else:
-                    nouvelle_entree = {
-                        'date_saisie': pd.to_datetime(date_saisie),
-                        'semaine': semaine_label,
-                        'type_niveau': type_niveau,
-                        'medicament': medicament_dist,
-                        'code_entite': code_entite if code_entite else '-',
-                        'nom_entite': nom_entite,
-                        'quantite_prevue': quantite_prevue,
-                        'quantite_expediee': quantite_expediee,
-                        'quantite_recue': quantite_recue,
-                        'observations': observations
-                    }
-                    
-                    df_dist = pd.concat([df_dist, pd.DataFrame([nouvelle_entree])], ignore_index=True)
-                    df_dist['date_saisie'] = pd.to_datetime(df_dist['date_saisie'], errors='coerce')
-                    df_dist['semaine_num'] = df_dist['date_saisie'].dt.isocalendar().week
-                    df_dist['annee'] = df_dist['date_saisie'].dt.isocalendar().year
-                    df_dist['mois_annee'] = df_dist['date_saisie'].dt.strftime('%Y-%m')
-                    df_dist = df_dist.sort_values('date_saisie').reset_index(drop=True)
-                    
-                    save_distribution_data(df_dist)
-                    st.success(f"✅ Entrée de distribution ajoutée pour {nom_entite} ({semaine_label}) !")
-                    st.rerun()
-    
-    if len(df_dist) == 0:
-        st.info("📋 Aucune donnée de distribution n'est encore enregistrée. Utilisez le formulaire ci-dessus pour ajouter la première entrée.")
-        return
-    
-    st.markdown("---")
-    st.markdown("### 📊 Indicateurs de distribution")
-    
-    total_prevu = df_dist['quantite_prevue'].sum()
-    total_expedie = df_dist['quantite_expediee'].sum()
-    total_recu = df_dist['quantite_recue'].sum()
-    
-    taux_expedition = (total_expedie / total_prevu * 100) if total_prevu > 0 else 0
-    taux_reception = (total_recu / total_expedie * 100) if total_expedie > 0 else 0
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("📋 Quantité totale prévue", f"{int(total_prevu):,}")
-    with col2:
-        st.metric("📤 Quantité totale expédiée", f"{int(total_expedie):,}",
-                 delta=f"{taux_expedition:.1f}% du prévu" if total_prevu > 0 else None)
-    with col3:
-        st.metric("📥 Quantité totale reçue", f"{int(total_recu):,}",
-                 delta=f"{taux_reception:.1f}% de l'expédié" if total_expedie > 0 else None)
-    with col4:
-        ecart_global = total_expedie - total_recu
-        if ecart_global > 0:
-            delta_ecart = f"⚠️ {int(ecart_global):,} en transit"
-            color_ecart = "off"
-        elif ecart_global < 0:
-            delta_ecart = f"⚠️ Sur-réception"
-            color_ecart = "inverse"
-        else:
-            delta_ecart = "✅ Concordance parfaite"
-            color_ecart = "normal"
+    # ========== PROTECTION PAR MOT DE PASSE ==========
+    if st.session_state.get('auth_saisie_distribution', False):
+        # Bouton de déconnexion
+        if st.button("🚪 Se déconnecter du formulaire", key="logout_distribution"):
+            st.session_state['auth_saisie_distribution'] = False
+            st.rerun()
         
-        st.metric("⚖️ Écart Expédié/Reçu", f"{int(abs(ecart_global)):,}",
-                 delta=delta_ecart, delta_color=color_ecart)
-    
-    st.markdown("---")
-    st.markdown("### 📋 Suivi par niveau de distribution")
-    
-    tab_nat, tab_cdr, tab_zs = st.tabs(["🌍 National → CDR", "🏭 CDR → ZS", "🏥 Zones de Santé"])
-    
-    with tab_nat:
-        df_nat = df_dist[df_dist['type_niveau'] == 'National'].copy()
-        if len(df_nat) > 0:
-            df_nat_grouped = df_nat.groupby(['nom_entite', 'medicament']).agg({
-                'quantite_prevue': 'sum',
-                'quantite_expediee': 'sum',
-                'quantite_recue': 'sum'
-            }).reset_index()
-            
-            df_nat_grouped['Taux expédition (%)'] = np.where(
-                df_nat_grouped['quantite_prevue'] > 0,
-                (df_nat_grouped['quantite_expediee'] / df_nat_grouped['quantite_prevue'] * 100).round(1),
-                0
-            )
-            
-            df_nat_grouped['Statut'] = df_nat_grouped['Taux expédition (%)'].apply(
-                lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-            )
-            
-            df_nat_display = df_nat_grouped.rename(columns={
-                'nom_entite': 'CDR destinataire',
-                'medicament': 'Médicament',
-                'quantite_prevue': 'Qté prévue',
-                'quantite_expediee': 'Qté expédiée',
-                'quantite_recue': 'Qté reçue'
-            })
-            
-            st.dataframe(df_nat_display, use_container_width=True, height=300)
-        else:
-            st.info("Aucune donnée d'expédition nationale pour le moment.")
-    
-    with tab_cdr:
-        df_cdr = df_dist[df_dist['type_niveau'] == 'CDR'].copy()
-        if len(df_cdr) > 0:
-            df_cdr_grouped = df_cdr.groupby(['nom_entite', 'medicament']).agg({
-                'quantite_prevue': 'sum',
-                'quantite_expediee': 'sum',
-                'quantite_recue': 'sum'
-            }).reset_index()
-            
-            df_cdr_grouped['Taux réception (%)'] = np.where(
-                df_cdr_grouped['quantite_expediee'] > 0,
-                (df_cdr_grouped['quantite_recue'] / df_cdr_grouped['quantite_expediee'] * 100).round(1),
-                0
-            )
-            
-            df_cdr_grouped['Statut'] = df_cdr_grouped['Taux réception (%)'].apply(
-                lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-            )
-            
-            df_cdr_display = df_cdr_grouped.rename(columns={
-                'nom_entite': 'CDR',
-                'medicament': 'Médicament',
-                'quantite_prevue': 'Qté prévue',
-                'quantite_expediee': 'Qté expédiée',
-                'quantite_recue': 'Qté reçue'
-            })
-            
-            st.dataframe(df_cdr_display, use_container_width=True, height=300)
-        else:
-            st.info("Aucune donnée de réception/redistribution CDR pour le moment.")
-    
-    with tab_zs:
-        df_zs = df_dist[df_dist['type_niveau'] == 'Zone de Santé'].copy()
-        if len(df_zs) > 0:
-            df_zs_grouped = df_zs.groupby(['nom_entite', 'medicament']).agg({
-                'quantite_prevue': 'sum',
-                'quantite_expediee': 'sum',
-                'quantite_recue': 'sum'
-            }).reset_index()
-            
-            df_zs_grouped['Taux réception (%)'] = np.where(
-                df_zs_grouped['quantite_prevue'] > 0,
-                (df_zs_grouped['quantite_recue'] / df_zs_grouped['quantite_prevue'] * 100).round(1),
-                0
-            )
-            
-            df_zs_grouped['Statut'] = df_zs_grouped['Taux réception (%)'].apply(
-                lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-            )
-            
-            df_zs_display = df_zs_grouped.rename(columns={
-                'nom_entite': 'Zone de Santé',
-                'medicament': 'Médicament',
-                'quantite_prevue': 'Qté prévue',
-                'quantite_expediee': 'Qté expédiée',
-                'quantite_recue': 'Qté reçue'
-            })
-            
-            st.dataframe(df_zs_display, use_container_width=True, height=300)
-        else:
-            st.info("Aucune donnée de réception Zone de Santé pour le moment.")
-    
-    st.markdown("---")
-    col_exp1, col_exp2 = st.columns(2)
-    with col_exp1:
-        st.download_button(
-            label="📥 Télécharger les données de distribution (CSV)",
-            data=df_dist.to_csv(index=False).encode('utf-8'),
-            file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with col_exp2:
-        st.download_button(
-            label="📥 Télécharger les données de distribution (Excel)",
-            data=to_excel(df_dist),
-            file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    st.markdown("---")
-    st.markdown("### 📊 Visualisation de la distribution")
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        df_med = df_dist.groupby('medicament').agg({
-            'quantite_prevue': 'sum',
-            'quantite_expediee': 'sum',
-            'quantite_recue': 'sum'
-        }).reset_index()
+        df_dist = load_distribution_data()
         
-        fig_med = go.Figure()
-        fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_prevue'],
-                                  name='Prévu', marker_color='#1f77b4'))
-        fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_expediee'],
-                                  name='Expédié', marker_color='#ff7f0e'))
-        fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_recue'],
-                                  name='Reçu', marker_color='#2ca02c'))
-        fig_med.update_layout(
-            title='Distribution par médicament (tous niveaux)',
-            xaxis_title='Médicament',
-            yaxis_title='Quantité',
-            barmode='group',
-            height=400,
-            xaxis_tickangle=45
-        )
-        st.plotly_chart(fig_med, use_container_width=True)
+        with st.expander("📝 **Ajouter / Modifier une entrée de distribution**", expanded=False):
+            with st.form("form_distribution", clear_on_submit=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    annee_courante = datetime.now().year
+                    annee_options = [annee_courante - 1, annee_courante, annee_courante + 1]
+                    annee_dist = st.selectbox("📅 Année", options=annee_options, index=1, key="annee_dist")
+                    
+                    semaines = get_semaines_annee(annee_dist)
+                    semaine_options = [s['label'] for s in semaines]
+                    
+                    semaine_actuelle = datetime.now().isocalendar()[1]
+                    index_defaut = min(semaine_actuelle - 1, len(semaine_options) - 1) if semaine_actuelle > 0 else 0
+                    
+                    semaine_label = st.selectbox("📆 Semaine", options=semaine_options, index=index_defaut, key="semaine_dist")
+                    semaine_idx = semaine_options.index(semaine_label)
+                    semaine_selectionnee = semaines[semaine_idx]
+                    
+                    date_saisie = semaine_selectionnee['fin']
+                    
+                    type_niveau = st.selectbox(
+                        "🏢 Niveau de distribution",
+                        options=TYPES_NIVEAUX
+                    )
+                    
+                    medicament_dist = st.selectbox(
+                        "💊 Médicament",
+                        options=list(MEDICAMENTS.keys()),
+                        key="med_dist"
+                    )
+                
+                with col2:
+                    code_entite = st.text_input("🔢 Code entité", value="", placeholder="Ex: CDR-001, ZS-012")
+                    nom_entite = st.text_input("🏥 Nom de l'entité", value="", placeholder="Ex: CDR Kinshasa")
+                    quantite_prevue = st.number_input("📋 Quantité prévue", min_value=0, value=0, step=100)
+                    quantite_expediee = st.number_input("📤 Quantité expédiée", min_value=0, value=0, step=100)
+                    quantite_recue = st.number_input("📥 Quantité reçue", min_value=0, value=0, step=100)
+                
+                observations = st.text_area("📝 Observations", value="", height=80)
+                
+                submitted = st.form_submit_button("✅ Enregistrer l'entrée", use_container_width=True)
+                
+                if submitted:
+                    if not nom_entite:
+                        st.error("⚠️ Veuillez renseigner le nom de l'entité.")
+                    else:
+                        nouvelle_entree = {
+                            'date_saisie': pd.to_datetime(date_saisie),
+                            'semaine': semaine_label,
+                            'type_niveau': type_niveau,
+                            'medicament': medicament_dist,
+                            'code_entite': code_entite if code_entite else '-',
+                            'nom_entite': nom_entite,
+                            'quantite_prevue': quantite_prevue,
+                            'quantite_expediee': quantite_expediee,
+                            'quantite_recue': quantite_recue,
+                            'observations': observations
+                        }
+                        
+                        df_dist = pd.concat([df_dist, pd.DataFrame([nouvelle_entree])], ignore_index=True)
+                        
+                        if save_distribution_data(df_dist):
+                            st.success(f"✅ Entrée ajoutée pour {nom_entite} ({semaine_label}) !")
+                            st.rerun()
+    else:
+        st.info("🔐 **Formulaire protégé** - Veuillez vous authentifier pour saisir des données")
+        check_password('saisie_distribution', 'saisie_distribution')
     
-    with col_g2:
-        if 'semaine' in df_dist.columns:
-            df_time = df_dist.groupby('semaine').agg({
+    # Affichage des données de distribution (toujours visible)
+    st.markdown("---")
+    df_dist_display = load_distribution_data()
+    
+    if len(df_dist_display) == 0:
+        st.info("📋 Aucune donnée de distribution n'est encore enregistrée.")
+    else:
+        st.markdown("### 📊 Indicateurs de distribution")
+        
+        total_prevu = df_dist_display['quantite_prevue'].sum()
+        total_expedie = df_dist_display['quantite_expediee'].sum()
+        total_recu = df_dist_display['quantite_recue'].sum()
+        
+        taux_expedition = (total_expedie / total_prevu * 100) if total_prevu > 0 else 0
+        taux_reception = (total_recu / total_expedie * 100) if total_expedie > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📋 Quantité totale prévue", f"{int(total_prevu):,}")
+        with col2:
+            st.metric("📤 Quantité totale expédiée", f"{int(total_expedie):,}",
+                     delta=f"{taux_expedition:.1f}% du prévu" if total_prevu > 0 else None)
+        with col3:
+            st.metric("📥 Quantité totale reçue", f"{int(total_recu):,}",
+                     delta=f"{taux_reception:.1f}% de l'expédié" if total_expedie > 0 else None)
+        with col4:
+            ecart_global = total_expedie - total_recu
+            if ecart_global > 0:
+                delta_ecart = f"⚠️ {int(ecart_global):,} en transit"
+                color_ecart = "off"
+            elif ecart_global < 0:
+                delta_ecart = f"⚠️ Sur-réception"
+                color_ecart = "inverse"
+            else:
+                delta_ecart = "✅ Concordance parfaite"
+                color_ecart = "normal"
+            
+            st.metric("⚖️ Écart Expédié/Reçu", f"{int(abs(ecart_global)):,}",
+                     delta=delta_ecart, delta_color=color_ecart)
+        
+        st.markdown("---")
+        st.markdown("### 📋 Suivi par niveau de distribution")
+        
+        tab_nat, tab_cdr, tab_zs = st.tabs(["🌍 National → CDR", "🏭 CDR → ZS", "🏥 Zones de Santé"])
+        
+        with tab_nat:
+            df_nat = df_dist_display[df_dist_display['type_niveau'] == 'National'].copy()
+            if len(df_nat) > 0:
+                df_nat_grouped = df_nat.groupby(['nom_entite', 'medicament']).agg({
+                    'quantite_prevue': 'sum',
+                    'quantite_expediee': 'sum',
+                    'quantite_recue': 'sum'
+                }).reset_index()
+                
+                df_nat_grouped['Taux expédition (%)'] = np.where(
+                    df_nat_grouped['quantite_prevue'] > 0,
+                    (df_nat_grouped['quantite_expediee'] / df_nat_grouped['quantite_prevue'] * 100).round(1),
+                    0
+                )
+                
+                df_nat_grouped['Statut'] = df_nat_grouped['Taux expédition (%)'].apply(
+                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
+                )
+                
+                df_nat_display = df_nat_grouped.rename(columns={
+                    'nom_entite': 'CDR destinataire',
+                    'medicament': 'Médicament',
+                    'quantite_prevue': 'Qté prévue',
+                    'quantite_expediee': 'Qté expédiée',
+                    'quantite_recue': 'Qté reçue'
+                })
+                
+                st.dataframe(df_nat_display, use_container_width=True, height=300)
+            else:
+                st.info("Aucune donnée d'expédition nationale pour le moment.")
+        
+        with tab_cdr:
+            df_cdr = df_dist_display[df_dist_display['type_niveau'] == 'CDR'].copy()
+            if len(df_cdr) > 0:
+                df_cdr_grouped = df_cdr.groupby(['nom_entite', 'medicament']).agg({
+                    'quantite_prevue': 'sum',
+                    'quantite_expediee': 'sum',
+                    'quantite_recue': 'sum'
+                }).reset_index()
+                
+                df_cdr_grouped['Taux réception (%)'] = np.where(
+                    df_cdr_grouped['quantite_expediee'] > 0,
+                    (df_cdr_grouped['quantite_recue'] / df_cdr_grouped['quantite_expediee'] * 100).round(1),
+                    0
+                )
+                
+                df_cdr_grouped['Statut'] = df_cdr_grouped['Taux réception (%)'].apply(
+                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
+                )
+                
+                df_cdr_display = df_cdr_grouped.rename(columns={
+                    'nom_entite': 'CDR',
+                    'medicament': 'Médicament',
+                    'quantite_prevue': 'Qté prévue',
+                    'quantite_expediee': 'Qté expédiée',
+                    'quantite_recue': 'Qté reçue'
+                })
+                
+                st.dataframe(df_cdr_display, use_container_width=True, height=300)
+            else:
+                st.info("Aucune donnée de réception/redistribution CDR pour le moment.")
+        
+        with tab_zs:
+            df_zs = df_dist_display[df_dist_display['type_niveau'] == 'Zone de Santé'].copy()
+            if len(df_zs) > 0:
+                df_zs_grouped = df_zs.groupby(['nom_entite', 'medicament']).agg({
+                    'quantite_prevue': 'sum',
+                    'quantite_expediee': 'sum',
+                    'quantite_recue': 'sum'
+                }).reset_index()
+                
+                df_zs_grouped['Taux réception (%)'] = np.where(
+                    df_zs_grouped['quantite_prevue'] > 0,
+                    (df_zs_grouped['quantite_recue'] / df_zs_grouped['quantite_prevue'] * 100).round(1),
+                    0
+                )
+                
+                df_zs_grouped['Statut'] = df_zs_grouped['Taux réception (%)'].apply(
+                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
+                )
+                
+                df_zs_display = df_zs_grouped.rename(columns={
+                    'nom_entite': 'Zone de Santé',
+                    'medicament': 'Médicament',
+                    'quantite_prevue': 'Qté prévue',
+                    'quantite_expediee': 'Qté expédiée',
+                    'quantite_recue': 'Qté reçue'
+                })
+                
+                st.dataframe(df_zs_display, use_container_width=True, height=300)
+            else:
+                st.info("Aucune donnée de réception Zone de Santé pour le moment.")
+        
+        st.markdown("---")
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            st.download_button(
+                label="📥 Télécharger les données de distribution (CSV)",
+                data=df_dist_display.to_csv(index=False).encode('utf-8'),
+                file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+        with col_exp2:
+            st.download_button(
+                label="📥 Télécharger les données de distribution (Excel)",
+                data=to_excel(df_dist_display),
+                file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        st.markdown("---")
+        st.markdown("### 📊 Visualisation de la distribution")
+        
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            df_med = df_dist_display.groupby('medicament').agg({
                 'quantite_prevue': 'sum',
                 'quantite_expediee': 'sum',
                 'quantite_recue': 'sum'
             }).reset_index()
             
-            df_time = df_time.sort_values('semaine')
-            
-            fig_time = go.Figure()
-            fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_prevue'],
-                                            mode='lines+markers', name='Prévu',
-                                            line=dict(color='#1f77b4', width=2)))
-            fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_expediee'],
-                                            mode='lines+markers', name='Expédié',
-                                            line=dict(color='#ff7f0e', width=2)))
-            fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_recue'],
-                                            mode='lines+markers', name='Reçu',
-                                            line=dict(color='#2ca02c', width=2)))
-            fig_time.update_layout(
-                title='Évolution hebdomadaire de la distribution',
-                xaxis_title='Semaine',
+            fig_med = go.Figure()
+            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_prevue'],
+                                      name='Prévu', marker_color='#1f77b4'))
+            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_expediee'],
+                                      name='Expédié', marker_color='#ff7f0e'))
+            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_recue'],
+                                      name='Reçu', marker_color='#2ca02c'))
+            fig_med.update_layout(
+                title='Distribution par médicament (tous niveaux)',
+                xaxis_title='Médicament',
                 yaxis_title='Quantité',
+                barmode='group',
                 height=400,
                 xaxis_tickangle=45
             )
-            st.plotly_chart(fig_time, use_container_width=True)
-    
-    st.markdown("---")
-    with st.expander("📜 **Voir le détail de toutes les entrées**", expanded=False):
-        df_detail = df_dist.copy()
-        df_detail['date_saisie'] = pd.to_datetime(df_detail['date_saisie']).dt.strftime('%d/%m/%Y')
+            st.plotly_chart(fig_med, use_container_width=True)
         
-        cols_affichage = ['date_saisie', 'semaine', 'type_niveau', 'medicament', 
-                          'code_entite', 'nom_entite', 'quantite_prevue', 
-                          'quantite_expediee', 'quantite_recue', 'observations']
-        cols_affichage = [c for c in cols_affichage if c in df_detail.columns]
-        
-        df_detail_display = df_detail[cols_affichage].rename(columns={
-            'date_saisie': 'Date',
-            'semaine': 'Semaine',
-            'type_niveau': 'Niveau',
-            'medicament': 'Médicament',
-            'code_entite': 'Code',
-            'nom_entite': 'Entité',
-            'quantite_prevue': 'Qté prévue',
-            'quantite_expediee': 'Qté expédiée',
-            'quantite_recue': 'Qté reçue',
-            'observations': 'Observations'
-        })
-        
-        st.dataframe(df_detail_display, use_container_width=True, height=400)
+        with col_g2:
+            if 'semaine' in df_dist_display.columns:
+                df_time = df_dist_display.groupby('semaine').agg({
+                    'quantite_prevue': 'sum',
+                    'quantite_expediee': 'sum',
+                    'quantite_recue': 'sum'
+                }).reset_index()
+                
+                df_time = df_time.sort_values('semaine')
+                
+                fig_time = go.Figure()
+                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_prevue'],
+                                                mode='lines+markers', name='Prévu',
+                                                line=dict(color='#1f77b4', width=2)))
+                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_expediee'],
+                                                mode='lines+markers', name='Expédié',
+                                                line=dict(color='#ff7f0e', width=2)))
+                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_recue'],
+                                                mode='lines+markers', name='Reçu',
+                                                line=dict(color='#2ca02c', width=2)))
+                fig_time.update_layout(
+                    title='Évolution hebdomadaire de la distribution',
+                    xaxis_title='Semaine',
+                    yaxis_title='Quantité',
+                    height=400,
+                    xaxis_tickangle=45
+                )
+                st.plotly_chart(fig_time, use_container_width=True)
 
 
 # ============================================================================
@@ -1578,7 +1668,7 @@ def show_summary_province(df):
             elif col not in ['Province', 'Performance']:
                 df_affichage[col] = df_affichage[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "0")
         
-        # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
+        # Utilisation de .map() au lieu de .applymap() pour compatibilité pandas 3.0
         styled_df = df_affichage.style.map(colorer_taux, subset=['Taux_ZS', 'Taux_CDT'])
         
         st.dataframe(styled_df, use_container_width=True, height=400)
@@ -1832,7 +1922,7 @@ def show_performance_graphs(completeness):
 
 
 # ============================================================================
-# ONGLET FINANCES
+# ONGLET FINANCES (PROTÉGÉ + GOOGLE SHEETS)
 # ============================================================================
 
 def get_mois_projet():
@@ -1865,52 +1955,49 @@ def get_semaines_du_mois(mois):
     return liste_semaines
 
 
-def load_finances_data():
-    try:
-        df_fin = pd.read_csv('finances_data.csv')
-        
-        if 'depenses_mensuelles' in df_fin.columns and 'depenses' not in df_fin.columns:
-            df_fin = df_fin.rename(columns={'depenses_mensuelles': 'depenses'})
-        
-        if 'type_suivi' not in df_fin.columns:
-            df_fin['type_suivi'] = 'mensuel'
-        
-        if 'depenses' not in df_fin.columns:
-            df_fin['depenses'] = 0
-        
-        for col in ['nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente']:
-            if col not in df_fin.columns:
-                df_fin[col] = 0
-        
-        if 'province_name' not in df_fin.columns:
-            df_fin['province_name'] = 'Toutes'
-        
-        if 'observations' not in df_fin.columns:
-            df_fin['observations'] = ''
-        
-        df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
-        df_fin['mois_num'] = df_fin['date_saisie'].dt.month
-        df_fin['annee'] = df_fin['date_saisie'].dt.year
-        df_fin['mois_annee'] = df_fin['date_saisie'].dt.strftime('%Y-%m')
-        df_fin['semaine_num'] = df_fin['date_saisie'].dt.isocalendar().week
-        
-        save_finances_data(df_fin)
-        
-        return df_fin
-    except FileNotFoundError:
-        return pd.DataFrame(columns=[
-            'type_suivi', 'date_saisie', 'province_name', 'depenses',
-            'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente',
-            'observations', 'mois_num', 'annee', 'mois_annee', 'semaine_num'
-        ])
-
-
-def save_finances_data(df_fin):
-    df_to_save = df_fin.drop(columns=['mois_num', 'annee', 'mois_annee', 'semaine_num'], errors='ignore')
-    df_to_save.to_csv('finances_data.csv', index=False)
-
-
 def show_finances_tab(df_main):
+    """Onglet Finances - Protégé par mot de passe + Google Sheets"""
+    
+    # ========== PROTECTION PAR MOT DE PASSE ==========
+    if not st.session_state.get('auth_consultation_finances', False):
+        st.markdown("""
+            <div style="background-color: #f8d7da; padding: 2rem; border-radius: 10px; border-left: 5px solid #dc3545; margin-bottom: 1rem; text-align: center;">
+                <h2 style="margin-top: 0;">🔒 Accès restreint aux finances</h2>
+                <p style="font-size: 1.1rem;">Cette section contient des informations financières sensibles.</p>
+                <p>Veuillez saisir le mot de passe pour accéder au tableau de bord financier.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("login_finances", clear_on_submit=False):
+                password = st.text_input(
+                    "🔑 Mot de passe", 
+                    type="password", 
+                    key="pwd_finances_input",
+                    placeholder="Entrez votre mot de passe"
+                )
+                
+                submit = st.form_submit_button("🔓 Accéder aux finances", use_container_width=True)
+                
+                if submit:
+                    if password == PASSWORDS.get('consultation_finances', ''):
+                        st.session_state['auth_consultation_finances'] = True
+                        st.success("✅ Authentification réussie !")
+                        st.rerun()
+                    else:
+                        st.error("❌ Mot de passe incorrect.")
+        
+        return
+    
+    # ========== BOUTON DE DÉCONNEXION ==========
+    col_logout1, col_logout2 = st.columns([4, 1])
+    with col_logout2:
+        if st.button("🚪 Se déconnecter", key="logout_finances", use_container_width=True):
+            st.session_state['auth_consultation_finances'] = False
+            st.rerun()
+    
+    # ========== CONTENU ==========
     st.subheader("💰 Tableau de bord financier du projet")
     
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
@@ -1955,16 +2042,6 @@ def show_finances_tab(df_main):
     """, unsafe_allow_html=True)
     
     df_fin = load_finances_data()
-    
-    if len(df_fin) > 0:
-        if 'depenses' not in df_fin.columns:
-            if 'depenses_mensuelles' in df_fin.columns:
-                df_fin['depenses'] = df_fin['depenses_mensuelles']
-            else:
-                df_fin['depenses'] = 0
-        
-        if 'type_suivi' not in df_fin.columns:
-            df_fin['type_suivi'] = 'mensuel'
     
     st.markdown("### ⚙️ Type de suivi")
     type_suivi = st.radio(
@@ -2095,8 +2172,8 @@ def show_finances_tab(df_main):
                 df_fin['semaine_num'] = df_fin['date_saisie'].dt.isocalendar().week
                 df_fin = df_fin.sort_values('date_saisie').reset_index(drop=True)
                 
-                save_finances_data(df_fin)
-                st.rerun()
+                if save_finances_data(df_fin):
+                    st.rerun()
     
     if len(df_fin) == 0:
         st.info("📋 Aucune donnée financière n'est encore enregistrée. Utilisez le formulaire ci-dessus.")
@@ -2270,7 +2347,6 @@ def show_finances_tab(df_main):
         for col in ['Prévision mensuelle ($)', 'Dépenses réelles ($)', 'Écart ($)']:
             df_mensuel_display[col] = df_mensuel_display[col].apply(lambda x: f"${x:,.2f}")
         
-        # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
         styled_mensuel = df_mensuel_display.style.map(colorer_statut, subset=['Statut'])
         st.dataframe(styled_mensuel, use_container_width=True, height=400)
         
@@ -2340,7 +2416,6 @@ def show_finances_tab(df_main):
             for col in ['Prévision hebdo ($)', 'Dépenses réelles ($)', 'Écart ($)']:
                 df_hebdo_display[col] = df_hebdo_display[col].apply(lambda x: f"${x:,.2f}")
             
-            # ⚠️ CORRECTION : applymap → map (compatible pandas 3.0)
             styled_hebdo = df_hebdo_display.style.map(colorer_statut, subset=['Statut'])
             st.dataframe(styled_hebdo, use_container_width=True, height=500)
             
