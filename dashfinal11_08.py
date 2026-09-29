@@ -71,7 +71,6 @@ st.markdown('<div class="main-header"><h1>🩺 Stop TB - Tableau de Bord FCSDS</
 # ============================================================================
 
 PROJET_CONFIG = {
-    'budget_total': 500000,
     'date_debut': '2026-06-01',
     'date_fin': '2027-03-31',
     'nom_projet': 'Stop TB - FCSDS'
@@ -339,6 +338,132 @@ def safe_int_convert(value):
     except (ValueError, TypeError):
         return 0
 
+def convertir_mois_fr_en_standard(mois_str):
+    """Convertit 'juin-26' → '2026-06'"""
+    mois_map_fr = {
+        'janv': '01', 'janvier': '01',
+        'févr': '02', 'fevr': '02', 'février': '02', 'fevrier': '02',
+        'mars': '03',
+        'avr': '04', 'avril': '04',
+        'mai': '05',
+        'juin': '06',
+        'juil': '07', 'juillet': '07',
+        'août': '08', 'aout': '08',
+        'sept': '09', 'septembre': '09',
+        'oct': '10', 'octobre': '10',
+        'nov': '11', 'novembre': '11',
+        'déc': '12', 'dec': '12', 'décembre': '12', 'decembre': '12'
+    }
+    
+    try:
+        mois_str_clean = str(mois_str).strip().lower()
+        parts = mois_str_clean.split('-')
+        if len(parts) == 2:
+            nom_mois, annee_court = parts
+            # Chercher le numéro du mois (match sur les 4 premières lettres)
+            num_mois = None
+            for key, val in mois_map_fr.items():
+                if nom_mois.startswith(key[:4]):
+                    num_mois = val
+                    break
+            if num_mois is None:
+                return None
+            # Année : '26' → '2026'
+            annee = '20' + annee_court if len(annee_court) == 2 else annee_court
+            return f"{annee}-{num_mois}"
+    except:
+        pass
+    return None
+
+
+@st.cache_data
+def load_budget_previsionnel():
+    """Charge le budget prévisionnel par province et par mois depuis le CSV"""
+    try:
+        df_budget = pd.read_csv(
+            'budget_previsionnel.csv',
+            sep=';',
+            decimal=',',
+            encoding='utf-8-sig',
+            skipinitialspace=True
+        )
+        
+        df_budget = df_budget.rename(columns={df_budget.columns[0]: 'province_name'})
+        
+        if 'Montant total' in df_budget.columns:
+            df_budget = df_budget.drop(columns=['Montant total'])
+        
+        df_budget = df_budget[df_budget['province_name'].str.strip() != 'Total budget']
+        df_budget = df_budget[df_budget['province_name'].notna()]
+        
+        df_budget['province_name'] = df_budget['province_name'].str.strip()
+        df_budget['province_name'] = df_budget['province_name'].apply(clean_province_name)
+        
+        for col in df_budget.columns:
+            if col != 'province_name':
+                df_budget[col] = pd.to_numeric(df_budget[col], errors='coerce').fillna(0)
+        
+        colonnes_mois = [c for c in df_budget.columns if c != 'province_name']
+        df_budget['budget_total_province'] = df_budget[colonnes_mois].sum(axis=1)
+        
+        # Format long
+        df_budget_long = df_budget.melt(
+            id_vars=['province_name'],
+            value_vars=colonnes_mois,
+            var_name='mois',
+            value_name='montant_prevu'
+        )
+        
+        df_budget_long['mois_str'] = df_budget_long['mois'].apply(convertir_mois_fr_en_standard)
+        df_budget_long = df_budget_long[df_budget_long['mois_str'].notna()]
+        
+        return df_budget, df_budget_long
+    except FileNotFoundError:
+        return pd.DataFrame(), pd.DataFrame()
+    except Exception as e:
+        st.error(f"❌ Erreur de chargement du budget : {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+
+def get_budget_total():
+    """Récupère le budget total du projet depuis le CSV"""
+    df_budget, _ = load_budget_previsionnel()
+    if len(df_budget) == 0:
+        return 0
+    return df_budget['budget_total_province'].sum()
+
+
+def get_prevision_mois(mois_str):
+    """Retourne la prévision totale pour un mois donné (format '2026-06')"""
+    df_budget, _ = load_budget_previsionnel()
+    if len(df_budget) == 0:
+        return 0
+    
+    # Trouver la colonne correspondant à ce mois
+    mois_map_fr = {
+        '01': 'janv', '02': 'févr', '03': 'mars', '04': 'avr',
+        '05': 'mai', '06': 'juin', '07': 'juil', '08': 'août',
+        '09': 'sept', '10': 'oct', '11': 'nov', '12': 'déc'
+    }
+    
+    try:
+        date_obj = pd.to_datetime(mois_str + '-01')
+        num_mois = date_obj.strftime('%m')
+        annee_court = date_obj.strftime('%y')
+        nom_fr = mois_map_fr.get(num_mois, '')
+        
+        for col in df_budget.columns:
+            if col == 'province_name' or col == 'budget_total_province':
+                continue
+            col_clean = col.lower()
+            if nom_fr.lower() in col_clean and annee_court in col_clean:
+                return df_budget[col].sum()
+    except:
+        pass
+    
+    return 0
+
+
 @st.cache_data
 def load_and_process_data():
     df = pd.read_csv('drc_stop_tb_data.csv')
@@ -588,11 +713,10 @@ def get_previous_period_df(df, type_periode, mois_selectionne=None, annee_select
     return df_previous
 
 # ============================================================================
-# FONCTIONS GOOGLE SHEETS (FINANCES ET DISTRIBUTION)
+# FONCTIONS GOOGLE SHEETS
 # ============================================================================
 
 def load_finances_data():
-    """Charge les données financières depuis Google Sheets"""
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_fin = conn.read(worksheet="finances", ttl=0)
@@ -643,7 +767,6 @@ def load_finances_data():
 
 
 def save_finances_data(df_fin):
-    """Sauvegarde les données financières dans Google Sheets"""
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_to_save = df_fin.drop(columns=['mois_num', 'annee', 'mois_annee', 'semaine_num'], errors='ignore')
@@ -655,7 +778,6 @@ def save_finances_data(df_fin):
 
 
 def load_distribution_data():
-    """Charge les données de distribution depuis Google Sheets"""
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_dist = conn.read(worksheet="distribution", ttl=0)
@@ -697,7 +819,6 @@ def load_distribution_data():
 
 
 def save_distribution_data(df_dist):
-    """Sauvegarde les données de distribution dans Google Sheets"""
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_to_save = df_dist.drop(columns=['semaine_num', 'annee', 'mois_annee'], errors='ignore')
@@ -706,61 +827,6 @@ def save_distribution_data(df_dist):
     except Exception as e:
         st.error(f"❌ Erreur de sauvegarde vers Google Sheets (distribution): {e}")
         return False
-
-
-# ============================================================================
-# CHARGEMENT DU BUDGET PRÉVISIONNEL
-# ============================================================================
-
-@st.cache_data
-def load_budget_previsionnel():
-    """Charge le budget prévisionnel par province et par mois depuis le CSV"""
-    try:
-        df_budget = pd.read_csv('budget_previsionnel.csv')
-        
-        # Renommer la première colonne en 'province_name'
-        df_budget = df_budget.rename(columns={df_budget.columns[0]: 'province_name'})
-        
-        # Supprimer la colonne 'Montant total' (on va la recalculer)
-        if 'Montant total' in df_budget.columns:
-            df_budget = df_budget.drop(columns=['Montant total'])
-        
-        # Supprimer la dernière ligne 'Total budget'
-        df_budget = df_budget[df_budget['province_name'] != 'Total budget']
-        df_budget = df_budget[df_budget['province_name'].notna()]
-        
-        # Nettoyer les noms de provinces
-        df_budget['province_name'] = df_budget['province_name'].apply(clean_province_name)
-        
-        # Remplacer les valeurs vides par 0
-        for col in df_budget.columns:
-            if col != 'province_name':
-                df_budget[col] = pd.to_numeric(df_budget[col], errors='coerce').fillna(0)
-        
-        # Calculer le montant total par province
-        colonnes_mois = [c for c in df_budget.columns if c != 'province_name']
-        df_budget['budget_total_province'] = df_budget[colonnes_mois].sum(axis=1)
-        
-        # Convertir en format long pour faciliter les calculs mensuels
-        df_budget_long = df_budget.melt(
-            id_vars=['province_name'],
-            value_vars=colonnes_mois,
-            var_name='mois',
-            value_name='montant_prevu'
-        )
-        
-        # Extraire l'année-mois pour le matching
-        df_budget_long['mois_str'] = df_budget_long['mois'].apply(
-            lambda x: pd.to_datetime(x, errors='coerce').strftime('%Y-%m') 
-            if pd.notna(pd.to_datetime(x, errors='coerce')) else None
-        )
-        
-        return df_budget, df_budget_long
-    except FileNotFoundError:
-        return pd.DataFrame(), pd.DataFrame()
-    except Exception as e:
-        st.error(f"❌ Erreur de chargement du budget : {e}")
-        return pd.DataFrame(), pd.DataFrame()
 
 
 # ============================================================================
@@ -1980,7 +2046,7 @@ def show_finances_par_province(df_fin, budget_total):
     df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
     df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
     
-    # ⚠️ CORRECTION : Utilisation de .apply au lieu de np.where
+    # ⚠️ Protection division par zéro
     df_province['Taux_absorption'] = df_province.apply(
         lambda row: round((row['Depenses_reelles'] / row['Budget_prevu'] * 100), 1) 
         if row['Budget_prevu'] > 0 else 0,
@@ -2019,8 +2085,6 @@ def show_finances_par_province(df_fin, budget_total):
     budget_total_reel = df_province['Budget_prevu'].sum()
     depenses_total_reel = df_province['Depenses_reelles'].sum()
     reste_total = budget_total_reel - depenses_total_reel
-    
-    # ⚠️ CORRECTION : Protection division par zéro
     taux_global = (depenses_total_reel / budget_total_reel * 100) if budget_total_reel > 0 else 0
     
     total_row = pd.DataFrame([{
@@ -2120,8 +2184,6 @@ def show_finances_par_province(df_fin, budget_total):
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Aucune donnée de budget à afficher")
     
     with col_g2:
         df_taux = df_province[df_province['Budget_prevu'] > 0].copy()
@@ -2154,8 +2216,6 @@ def show_finances_par_province(df_fin, budget_total):
             fig_taux.add_vline(x=80, line_dash="dash", line_color="green", 
                               annotation_text="Cible 80%")
             st.plotly_chart(fig_taux, use_container_width=True)
-        else:
-            st.info("Aucune donnée de taux à afficher")
     
     st.markdown("---")
     st.markdown("### 📅 Suivi budgétaire mensuel par province")
@@ -2173,10 +2233,8 @@ def show_finances_par_province(df_fin, budget_total):
             df_budget_long['province_name'] == province_selectionnee
         ].copy()
         
+        # Agréger TOUTES les dépenses (mensuelles + hebdo) par mois
         df_dep_prov = df_fin[
-            (df_fin['province_name'] == province_selectionnee) & 
-            (df_fin['type_suivi'] == 'mensuel')
-        ].copy() if 'type_suivi' in df_fin.columns else df_fin[
             df_fin['province_name'] == province_selectionnee
         ].copy()
         
@@ -2197,8 +2255,7 @@ def show_finances_par_province(df_fin, budget_total):
         df_suivi_mois['depenses_reelles'] = df_suivi_mois['depenses_reelles'].fillna(0)
         df_suivi_mois['ecart'] = df_suivi_mois['montant_prevu'] - df_suivi_mois['depenses_reelles']
         
-        # ⚠️ CORRECTION PRINCIPALE : Utilisation de .apply au lieu de np.where
-        # Cela évite la division par zéro quand montant_prevu = 0
+        # ⚠️ Protection division par zéro avec .apply
         df_suivi_mois['taux'] = df_suivi_mois.apply(
             lambda row: round((row['depenses_reelles'] / row['montant_prevu'] * 100), 1) 
             if row['montant_prevu'] > 0 else 0,
@@ -2291,6 +2348,7 @@ def show_finances_par_province(df_fin, budget_total):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+
 # ============================================================================
 # ONGLET FINANCES
 # ============================================================================
@@ -2369,14 +2427,24 @@ def show_finances_tab(df_main):
     
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
-    budget_total = PROJET_CONFIG['budget_total']
     
+    # ========== LECTURE DYNAMIQUE DU BUDGET ==========
+    budget_total = get_budget_total()
+    
+    if budget_total == 0:
+        st.warning("⚠️ Impossible de lire le budget depuis `budget_previsionnel.csv`. Utilisation de 0 par défaut.")
+        budget_total = 0
+    
+    df_budget, _ = load_budget_previsionnel()
+    
+    # Nombre de mois du projet
     mois_projet = get_mois_projet()
     nb_mois_total = len(mois_projet)
-    prevision_mensuelle = budget_total / nb_mois_total
     
+    # Prévision moyenne pour référence
+    prevision_mensuelle_moyenne = budget_total / nb_mois_total if nb_mois_total > 0 else 0
     nb_semaines_total = nb_mois_total * 4
-    prevision_hebdo = budget_total / nb_semaines_total
+    prevision_hebdo = budget_total / nb_semaines_total if nb_semaines_total > 0 else 0
     
     aujourdhui = pd.Timestamp.now()
     mois_ecoules = [m for m in mois_projet if m <= aujourdhui]
@@ -2396,7 +2464,7 @@ def show_finances_tab(df_main):
                 <td><strong>Budget total :</strong></td>
                 <td><strong>{budget_total:,.0f} USD</strong></td>
                 <td><strong>Durée :</strong></td>
-                <td>{nb_mois_total} mois ({nb_semaines_total} semaines)</td>
+                <td>{nb_mois_total} mois</td>
             </tr>
         </table>
     </div>
@@ -2436,7 +2504,7 @@ def show_finances_tab(df_main):
                     mois_selectionne = pd.to_datetime(mois_selectionne_str, format='%B %Y')
                     date_saisie = mois_selectionne + pd.Timedelta(days=14)
                     depenses_label = "💸 Dépenses mensuelles (USD)"
-                    depenses_default = prevision_mensuelle
+                    depenses_default = prevision_mensuelle_moyenne
                     cle_mois = mois_selectionne.strftime('%Y-%m')
                     type_enregistrement = 'mensuel'
                     
@@ -2534,6 +2602,8 @@ def show_finances_tab(df_main):
     
     if len(df_fin) == 0:
         st.info("📋 Aucune donnée financière n'est encore enregistrée.")
+        # On affiche quand même le suivi par province
+        show_finances_par_province(df_fin, budget_total)
         return
     
     df_fin_mensuel = df_fin[df_fin.get('type_suivi', 'mensuel') == 'mensuel'].copy() if 'type_suivi' in df_fin.columns else df_fin.copy()
@@ -2541,15 +2611,17 @@ def show_finances_tab(df_main):
     
     if 'depenses' not in df_fin.columns:
         df_fin['depenses'] = 0
-    if 'depenses' not in df_fin_mensuel.columns:
-        df_fin_mensuel['depenses'] = 0
-    if len(df_fin_hebdo) > 0 and 'depenses' not in df_fin_hebdo.columns:
-        df_fin_hebdo['depenses'] = 0
     
-    if len(df_fin_mensuel) > 0:
-        depenses_totales = df_fin_mensuel['depenses'].sum()
-    else:
-        depenses_totales = df_fin['depenses'].sum()
+    df_fin['mois_annee'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce').dt.strftime('%Y-%m')
+    
+    # ========== DÉPENSES TOTALES (MENSUEL + HEBDO) ==========
+    depenses_totales = df_fin['depenses'].sum()
+    
+    # Agrégation par mois (mensuel + hebdo)
+    depenses_par_mois_toutes = df_fin.groupby('mois_annee').agg({
+        'depenses': 'sum'
+    }).reset_index()
+    depenses_par_mois_toutes.columns = ['mois_annee', 'total_depenses']
     
     budget_restant = budget_total - depenses_totales
     taux_absorption_global = (depenses_totales / budget_total * 100) if budget_total > 0 else 0
@@ -2561,7 +2633,10 @@ def show_finances_tab(df_main):
     dp_attente_total = df_fin['nombre_dp_en_attente'].sum() if 'nombre_dp_en_attente' in df_fin.columns else 0
     taux_traitement_dp = (dp_traite_total / dp_recu_total * 100) if dp_recu_total > 0 else 0
     
-    prevision_a_date = prevision_mensuelle * nb_mois_ecoules
+    # Prévision à date = somme des prévisions des mois écoulés
+    prevision_a_date = 0
+    for mois in mois_ecoules:
+        prevision_a_date += get_prevision_mois(mois.strftime('%Y-%m'))
     
     st.markdown("---")
     st.markdown("### 📊 Indicateurs financiers globaux")
@@ -2612,8 +2687,7 @@ def show_finances_tab(df_main):
         st.metric("📊 Écart absorption/temps", f"{ecart:+.1f} pts",
                  delta=delta_ecart, delta_color=color_ecart)
     with col7:
-        st.metric("🎯 Prévision à date", f"${prevision_a_date:,.2f}",
-                 delta=f"{prevision_mensuelle:,.0f}/mois")
+        st.metric("🎯 Prévision à date", f"${prevision_a_date:,.2f}")
     with col8:
         ecart_montant = depenses_totales - prevision_a_date
         if ecart_montant >= 0:
@@ -2651,7 +2725,7 @@ def show_finances_tab(df_main):
         st.metric("📊 Taux traitement DP", f"{taux_traitement_dp:.1f}%",
                  delta=delta_dp, delta_color=color_dp)
     
-    # ========== NOUVEAU : Suivi budgétaire par province ==========
+    # ========== SUIVI PAR PROVINCE ==========
     show_finances_par_province(df_fin, budget_total)
     
     st.markdown("---")
@@ -2672,56 +2746,86 @@ def show_finances_tab(df_main):
     
     if 'Mensuel' in type_suivi:
         st.markdown("### 📅 Suivi mensuel du budget")
+        st.info("ℹ️ **Note** : Le suivi mensuel agrège automatiquement les saisies **mensuelles ET hebdomadaires**.")
         
         data_mensuel = []
         for mois in mois_projet:
             mois_str = mois.strftime('%B %Y')
             mois_annee_str = mois.strftime('%Y-%m')
             
-            ligne = df_fin_mensuel[df_fin_mensuel['mois_annee'] == mois_annee_str] if len(df_fin_mensuel) > 0 else pd.DataFrame()
-            depenses_mois = ligne['depenses'].sum() if len(ligne) > 0 else 0
+            # Prévision du mois = somme des budgets de toutes les provinces
+            prevision_ce_mois = get_prevision_mois(mois_annee_str)
+            
+            # Dépenses du mois = SOMME mensuel + hebdo
+            ligne = depenses_par_mois_toutes[depenses_par_mois_toutes['mois_annee'] == mois_annee_str]
+            depenses_mois = ligne['total_depenses'].sum() if len(ligne) > 0 else 0
             
             mois_est_passe = mois <= aujourdhui
             if mois_est_passe and depenses_mois == 0:
                 statut = "🔴 Aucune dépense"
-            elif mois_est_passe and depenses_mois < prevision_mensuelle * 0.7:
+            elif mois_est_passe and depenses_mois < prevision_ce_mois * 0.7:
                 statut = "🟡 Sous-consommation"
-            elif mois_est_passe and depenses_mois > prevision_mensuelle * 1.2:
+            elif mois_est_passe and depenses_mois > prevision_ce_mois * 1.2:
                 statut = "🟠 Sur-consommation"
             elif mois_est_passe:
                 statut = "🟢 OK"
             else:
                 statut = "⏳ À venir"
             
+            taux_mois = round((depenses_mois / prevision_ce_mois * 100), 1) if prevision_ce_mois > 0 else 0
+            
             data_mensuel.append({
                 'Mois': mois_str,
-                'Prévision mensuelle ($)': prevision_mensuelle,
+                'Prévision mensuelle ($)': prevision_ce_mois,
                 'Dépenses réelles ($)': depenses_mois,
-                'Écart ($)': depenses_mois - prevision_mensuelle,
+                'Écart ($)': depenses_mois - prevision_ce_mois,
+                'Taux (%)': taux_mois,
                 'Statut': statut
             })
         
         df_mensuel = pd.DataFrame(data_mensuel)
         
-        df_mensuel_display = df_mensuel.copy()
+        # Ligne TOTAL
+        total_prevision = df_mensuel['Prévision mensuelle ($)'].sum()
+        total_depenses = df_mensuel['Dépenses réelles ($)'].sum()
+        total_ecart = total_depenses - total_prevision
+        total_taux = round((total_depenses / total_prevision * 100), 1) if total_prevision > 0 else 0
+        
+        total_row = pd.DataFrame([{
+            'Mois': '**TOTAL**',
+            'Prévision mensuelle ($)': total_prevision,
+            'Dépenses réelles ($)': total_depenses,
+            'Écart ($)': total_ecart,
+            'Taux (%)': total_taux,
+            'Statut': '📊 Bilan'
+        }])
+        
+        df_mensuel_final = pd.concat([df_mensuel, total_row], ignore_index=True)
+        
+        df_mensuel_display = df_mensuel_final.copy()
         for col in ['Prévision mensuelle ($)', 'Dépenses réelles ($)', 'Écart ($)']:
-            df_mensuel_display[col] = df_mensuel_display[col].apply(lambda x: f"${x:,.2f}")
+            df_mensuel_display[col] = df_mensuel_display[col].apply(
+                lambda x: f"${x:,.2f}" if isinstance(x, (int, float, np.integer, np.floating)) else x
+            )
+        df_mensuel_display['Taux (%)'] = df_mensuel_display['Taux (%)'].apply(
+            lambda x: f"{x:.1f}%" if isinstance(x, (int, float, np.integer, np.floating)) else x
+        )
         
         styled_mensuel = df_mensuel_display.style.map(colorer_statut, subset=['Statut'])
-        st.dataframe(styled_mensuel, use_container_width=True, height=400)
+        st.dataframe(styled_mensuel, use_container_width=True, height=450)
         
         col1_export, col2_export = st.columns(2)
         with col1_export:
             st.download_button(
                 label="📥 Télécharger le suivi mensuel (CSV)",
-                data=df_mensuel.to_csv(index=False).encode('utf-8'),
+                data=df_mensuel_final.to_csv(index=False).encode('utf-8'),
                 file_name=f"suivi_mensuel_budget_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
         with col2_export:
             st.download_button(
                 label="📥 Télécharger le suivi mensuel (Excel)",
-                data=to_excel(df_mensuel),
+                data=to_excel(df_mensuel_final),
                 file_name=f"suivi_mensuel_budget_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
