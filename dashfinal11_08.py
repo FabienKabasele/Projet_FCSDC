@@ -1954,12 +1954,6 @@ def show_finances_par_province(df_fin, budget_total):
     
     if len(df_budget) == 0:
         st.warning("⚠️ Fichier `budget_previsionnel.csv` non trouvé ou vide.")
-        st.info("""
-        **Pour utiliser cette fonctionnalité :**
-        1. Enregistrez votre fichier Excel de budget en CSV : `budget_previsionnel.csv`
-        2. Placez-le à la racine du projet
-        3. Le fichier sera lu automatiquement
-        """)
         return
     
     df_budget_prov = df_budget[['province_name', 'budget_total_province']].copy()
@@ -1985,10 +1979,12 @@ def show_finances_par_province(df_fin, budget_total):
     
     df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
     df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
-    df_province['Taux_absorption'] = np.where(
-        df_province['Budget_prevu'] > 0,
-        (df_province['Depenses_reelles'] / df_province['Budget_prevu'] * 100).round(1),
-        0
+    
+    # ⚠️ CORRECTION : Utilisation de .apply au lieu de np.where
+    df_province['Taux_absorption'] = df_province.apply(
+        lambda row: round((row['Depenses_reelles'] / row['Budget_prevu'] * 100), 1) 
+        if row['Budget_prevu'] > 0 else 0,
+        axis=1
     )
     
     def statut_province(taux):
@@ -2023,6 +2019,8 @@ def show_finances_par_province(df_fin, budget_total):
     budget_total_reel = df_province['Budget_prevu'].sum()
     depenses_total_reel = df_province['Depenses_reelles'].sum()
     reste_total = budget_total_reel - depenses_total_reel
+    
+    # ⚠️ CORRECTION : Protection division par zéro
     taux_global = (depenses_total_reel / budget_total_reel * 100) if budget_total_reel > 0 else 0
     
     total_row = pd.DataFrame([{
@@ -2094,63 +2092,70 @@ def show_finances_par_province(df_fin, budget_total):
     with col_g1:
         df_graph = df_province[df_province['Budget_prevu'] > 0].copy()
         
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=df_graph['Province'],
-            y=df_graph['Budget_prevu'],
-            name='Budget prévu',
-            marker_color='#1f77b4',
-            text=df_graph['Budget_prevu'].apply(lambda x: f"${x:,.0f}"),
-            textposition='outside'
-        ))
-        fig.add_trace(go.Bar(
-            x=df_graph['Province'],
-            y=df_graph['Depenses_reelles'],
-            name='Dépenses réelles',
-            marker_color='#ff7f0e',
-            text=df_graph['Depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
-            textposition='outside'
-        ))
-        fig.update_layout(
-            title='Budget prévu vs Dépenses réelles par province',
-            xaxis_title='Province',
-            yaxis_title='Montant ($)',
-            barmode='group',
-            height=450,
-            xaxis_tickangle=45,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if len(df_graph) > 0:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=df_graph['Province'],
+                y=df_graph['Budget_prevu'],
+                name='Budget prévu',
+                marker_color='#1f77b4',
+                text=df_graph['Budget_prevu'].apply(lambda x: f"${x:,.0f}"),
+                textposition='outside'
+            ))
+            fig.add_trace(go.Bar(
+                x=df_graph['Province'],
+                y=df_graph['Depenses_reelles'],
+                name='Dépenses réelles',
+                marker_color='#ff7f0e',
+                text=df_graph['Depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
+                textposition='outside'
+            ))
+            fig.update_layout(
+                title='Budget prévu vs Dépenses réelles par province',
+                xaxis_title='Province',
+                yaxis_title='Montant ($)',
+                barmode='group',
+                height=450,
+                xaxis_tickangle=45,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Aucune donnée de budget à afficher")
     
     with col_g2:
         df_taux = df_province[df_province['Budget_prevu'] > 0].copy()
-        df_taux = df_taux.sort_values('Taux_absorption', ascending=True)
         
-        fig_taux = go.Figure()
-        fig_taux.add_trace(go.Bar(
-            x=df_taux['Taux_absorption'],
-            y=df_taux['Province'],
-            orientation='h',
-            marker_color=df_taux['Taux_absorption'].apply(
-                lambda x: '#28a745' if x >= 90 
-                else '#17becf' if x >= 80 
-                else '#ffc107' if x >= 50 
-                else '#dc3545'
-            ),
-            text=df_taux['Taux_absorption'].apply(lambda x: f"{x:.1f}%"),
-            textposition='outside'
-        ))
-        fig_taux.update_layout(
-            title="Taux d'absorption par province (%)",
-            xaxis_title="Taux d'absorption (%)",
-            yaxis_title="",
-            height=450,
-            xaxis_range=[0, 120],
-            showlegend=False
-        )
-        fig_taux.add_vline(x=80, line_dash="dash", line_color="green", 
-                          annotation_text="Cible 80%")
-        st.plotly_chart(fig_taux, use_container_width=True)
+        if len(df_taux) > 0:
+            df_taux = df_taux.sort_values('Taux_absorption', ascending=True)
+            
+            fig_taux = go.Figure()
+            fig_taux.add_trace(go.Bar(
+                x=df_taux['Taux_absorption'],
+                y=df_taux['Province'],
+                orientation='h',
+                marker_color=df_taux['Taux_absorption'].apply(
+                    lambda x: '#28a745' if x >= 90 
+                    else '#17becf' if x >= 80 
+                    else '#ffc107' if x >= 50 
+                    else '#dc3545'
+                ),
+                text=df_taux['Taux_absorption'].apply(lambda x: f"{x:.1f}%"),
+                textposition='outside'
+            ))
+            fig_taux.update_layout(
+                title="Taux d'absorption par province (%)",
+                xaxis_title="Taux d'absorption (%)",
+                yaxis_title="",
+                height=450,
+                xaxis_range=[0, 120],
+                showlegend=False
+            )
+            fig_taux.add_vline(x=80, line_dash="dash", line_color="green", 
+                              annotation_text="Cible 80%")
+            st.plotly_chart(fig_taux, use_container_width=True)
+        else:
+            st.info("Aucune donnée de taux à afficher")
     
     st.markdown("---")
     st.markdown("### 📅 Suivi budgétaire mensuel par province")
@@ -2191,10 +2196,13 @@ def show_finances_par_province(df_fin, budget_total):
         
         df_suivi_mois['depenses_reelles'] = df_suivi_mois['depenses_reelles'].fillna(0)
         df_suivi_mois['ecart'] = df_suivi_mois['montant_prevu'] - df_suivi_mois['depenses_reelles']
-        df_suivi_mois['taux'] = np.where(
-            df_suivi_mois['montant_prevu'] > 0,
-            (df_suivi_mois['depenses_reelles'] / df_suivi_mois['montant_prevu'] * 100).round(1),
-            0
+        
+        # ⚠️ CORRECTION PRINCIPALE : Utilisation de .apply au lieu de np.where
+        # Cela évite la division par zéro quand montant_prevu = 0
+        df_suivi_mois['taux'] = df_suivi_mois.apply(
+            lambda row: round((row['depenses_reelles'] / row['montant_prevu'] * 100), 1) 
+            if row['montant_prevu'] > 0 else 0,
+            axis=1
         )
         
         df_suivi_mois = df_suivi_mois.sort_values('mois_str')
@@ -2282,7 +2290,6 @@ def show_finances_par_province(df_fin, budget_total):
             file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
 
 # ============================================================================
 # ONGLET FINANCES
