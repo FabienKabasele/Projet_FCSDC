@@ -309,7 +309,7 @@ def clean_province_name(name):
         return None
     name = str(name).strip()
     mapping = {
-        'national': 'National',   # ← Niveau central
+        'national': 'National',
         'haut katanga': 'Haut Katanga', 'hautkatanga': 'Haut Katanga', 'katanga': 'Haut Katanga',
         'haut lomami': 'Haut Lomami', 'hautlomami': 'Haut Lomami', 'lomami': 'Lomami',
         'kasai oriental': 'Kasai Oriental', 'kasaioriental': 'Kasai Oriental',
@@ -2544,6 +2544,26 @@ def show_finances_tab(df_main):
     
     df_fin = load_finances_data()
     
+    # ⚠️ CRITIQUE : forcer les types pour éviter les erreurs d'assignation (LossySetitemError)
+    if len(df_fin) > 0:
+        # Colonnes numériques
+        for col in ['depenses', 'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente']:
+            if col in df_fin.columns:
+                df_fin[col] = pd.to_numeric(df_fin[col], errors='coerce').fillna(0)
+        
+        # Colonnes texte : s'assurer qu'elles sont bien en object/str
+        for col in ['type_suivi', 'province_name', 'observations']:
+            if col in df_fin.columns:
+                df_fin[col] = df_fin[col].astype('object')
+                df_fin[col] = df_fin[col].where(df_fin[col].notna(), '')
+                df_fin[col] = df_fin[col].astype(str)
+                # Remplacer les 'nan' textuels
+                df_fin[col] = df_fin[col].replace('nan', '')
+        
+        # Dates
+        if 'date_saisie' in df_fin.columns:
+            df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
+    
     st.markdown("### ⚙️ Type de suivi")
     type_suivi = st.radio(
         "Choisissez le type de suivi à afficher",
@@ -2631,15 +2651,26 @@ def show_finances_tab(df_main):
             submitted = st.form_submit_button("✅ Enregistrer l'entrée", use_container_width=True)
             
             if submitted:
+                # ⚠️ CORRECTION : inclure la province ET le type dans le masque pour ne pas écraser une autre entité
                 if type_enregistrement == 'mensuel':
-                    masque = (df_fin.get('type_suivi', '') == 'mensuel') & (df_fin['mois_annee'] == cle_mois) if len(df_fin) > 0 else pd.Series([False])
+                    if len(df_fin) > 0 and 'province_name' in df_fin.columns:
+                        masque = (
+                            (df_fin.get('type_suivi', pd.Series(['mensuel'] * len(df_fin))) == 'mensuel') &
+                            (df_fin['mois_annee'] == cle_mois) &
+                            (df_fin['province_name'] == province)
+                        )
+                    else:
+                        masque = pd.Series([False])
                 else:
-                    if len(df_fin) > 0:
+                    if len(df_fin) > 0 and 'province_name' in df_fin.columns:
                         semaine_target = semaine_selectionnee['fin'].isocalendar()[1]
                         annee_target = semaine_selectionnee['fin'].isocalendar()[0]
-                        masque = (df_fin.get('type_suivi', '') == 'hebdomadaire') & \
-                                 (df_fin['date_saisie'].dt.isocalendar().week == semaine_target) & \
-                                 (df_fin['date_saisie'].dt.isocalendar().year == annee_target)
+                        masque = (
+                            (df_fin.get('type_suivi', pd.Series(['mensuel'] * len(df_fin))) == 'hebdomadaire') &
+                            (df_fin['date_saisie'].dt.isocalendar().week == semaine_target) &
+                            (df_fin['date_saisie'].dt.isocalendar().year == annee_target) &
+                            (df_fin['province_name'] == province)
+                        )
                     else:
                         masque = pd.Series([False])
                 
@@ -2654,15 +2685,17 @@ def show_finances_tab(df_main):
                     'observations': observations
                 }
                 
+                # ⚠️ CORRECTION : supprimer l'ancienne ligne + recréer, au lieu de modifier (évite les erreurs de typage)
                 if masque.any():
-                    idx = df_fin[masque].index[0]
-                    for key, value in nouvelle_entree.items():
-                        df_fin.loc[idx, key] = value
-                    st.success(f"✅ Entrée {type_enregistrement} mise à jour !")
+                    idx_a_supprimer = df_fin[masque].index.tolist()
+                    df_fin = df_fin.drop(idx_a_supprimer).reset_index(drop=True)
+                    df_fin = pd.concat([df_fin, pd.DataFrame([nouvelle_entree])], ignore_index=True)
+                    st.success(f"✅ Entrée {type_enregistrement} mise à jour pour {province} !")
                 else:
                     df_fin = pd.concat([df_fin, pd.DataFrame([nouvelle_entree])], ignore_index=True)
-                    st.success(f"✅ Nouvelle entrée {type_enregistrement} ajoutée !")
+                    st.success(f"✅ Nouvelle entrée {type_enregistrement} ajoutée pour {province} !")
                 
+                # Recalculer les colonnes dérivées
                 df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
                 df_fin['mois_num'] = df_fin['date_saisie'].dt.month
                 df_fin['annee'] = df_fin['date_saisie'].dt.year
@@ -2975,7 +3008,7 @@ def show_finances_tab(df_main):
                     file_name=f"suivi_hebdomadaire_budget_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
-            with col_export2:
+            with col2_export:
                 st.download_button(
                     label="📥 Télécharger le suivi hebdomadaire (Excel)",
                     data=to_excel(df_hebdo),
