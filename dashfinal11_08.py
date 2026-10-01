@@ -309,6 +309,7 @@ def clean_province_name(name):
         return None
     name = str(name).strip()
     mapping = {
+        'national': 'National',   # ← Niveau central
         'haut katanga': 'Haut Katanga', 'hautkatanga': 'Haut Katanga', 'katanga': 'Haut Katanga',
         'haut lomami': 'Haut Lomami', 'hautlomami': 'Haut Lomami', 'lomami': 'Lomami',
         'kasai oriental': 'Kasai Oriental', 'kasaioriental': 'Kasai Oriental',
@@ -385,7 +386,7 @@ def convertir_mois_fr_en_standard(mois_str):
 
 @st.cache_data
 def load_budget_previsionnel():
-    """Charge le budget prévisionnel par province et par mois depuis le CSV"""
+    """Charge le budget prévisionnel par province/niveau et par mois depuis le CSV"""
     try:
         df_budget = pd.read_csv(
             'budget_previsionnel.csv',
@@ -432,7 +433,7 @@ def load_budget_previsionnel():
 
 
 def get_budget_total():
-    """Récupère le budget total du projet (somme des 10 mois) depuis le CSV"""
+    """Récupère le budget total du projet (provinces + National) depuis le CSV"""
     df_budget, _ = load_budget_previsionnel()
     if len(df_budget) == 0:
         return 0
@@ -440,7 +441,7 @@ def get_budget_total():
 
 
 def get_prevision_mois(mois_str):
-    """Retourne la prévision totale pour un mois donné (format '2026-06')"""
+    """Retourne la prévision totale (provinces + National) pour un mois donné"""
     df_budget, _ = load_budget_previsionnel()
     if len(df_budget) == 0:
         return 0
@@ -2012,11 +2013,11 @@ def show_performance_graphs(completeness):
 
 
 # ============================================================================
-# SUIVI BUDGÉTAIRE PAR PROVINCE
+# SUIVI BUDGÉTAIRE PAR PROVINCE ET NIVEAU NATIONAL
 # ============================================================================
 
 def show_finances_par_province(df_fin, budget_total):
-    """Affiche le suivi budgétaire par province basé sur le budget prévisionnel réel"""
+    """Affiche le suivi budgétaire par province + niveau National (central)"""
     
     st.markdown("---")
     st.markdown("### 📊 Suivi budgétaire par province et niveau national")
@@ -2027,84 +2028,104 @@ def show_finances_par_province(df_fin, budget_total):
         st.warning("⚠️ Fichier `budget_previsionnel.csv` non trouvé ou vide.")
         return
     
+    # Le budget prévisionnel contient déjà la ligne "National" avec son budget
     df_budget_prov = df_budget[['province_name', 'budget_total_province']].copy()
     df_budget_prov.columns = ['Province', 'Budget_prevu']
     
-    # Exclure le niveau National (dépenses centrales) du suivi par province
-    df_fin_province = df_fin[~df_fin['province_name'].isin(['Toutes', 'National', ''])].copy()
-    df_fin_province = df_fin_province[df_fin_province['province_name'].notna()]
+    # ========== DÉPENSES RÉELLES PAR ENTITÉ (provinces + National) ==========
+    # Normaliser : "Toutes" et "" → "National" (rétrocompatibilité)
+    df_fin_clean = df_fin.copy()
+    if 'province_name' in df_fin_clean.columns:
+        df_fin_clean['province_name'] = df_fin_clean['province_name'].replace({'Toutes': 'National', '': 'National'})
+        df_fin_clean['province_name'] = df_fin_clean['province_name'].fillna('National')
     
-    if 'depenses' in df_fin_province.columns and len(df_fin_province) > 0:
-        depenses_par_province = df_fin_province.groupby('province_name').agg({
+    if 'depenses' in df_fin_clean.columns and len(df_fin_clean) > 0:
+        depenses_par_entite = df_fin_clean.groupby('province_name').agg({
             'depenses': 'sum'
         }).reset_index()
-        depenses_par_province.columns = ['Province', 'Depenses_reelles']
+        depenses_par_entite.columns = ['Province', 'Depenses_reelles']
     else:
-        depenses_par_province = pd.DataFrame(columns=['Province', 'Depenses_reelles'])
+        depenses_par_entite = pd.DataFrame(columns=['Province', 'Depenses_reelles'])
     
+    # ========== FUSION BUDGET + DÉPENSES ==========
     df_province = df_budget_prov.merge(
-        depenses_par_province, 
+        depenses_par_entite, 
         on='Province', 
         how='left'
     )
     
-    # Ajouter une ligne pour les dépenses nationales (centrales)
-    df_fin_national = df_fin[df_fin['province_name'].isin(['National', 'Toutes'])].copy()
-    if len(df_fin_national) > 0 and 'depenses' in df_fin_national.columns:
-        depenses_nationales = df_fin_national['depenses'].sum()
-        if depenses_nationales > 0:
-            ligne_nationale = pd.DataFrame([{
-                'Province': '🌍 National (central)',
-                'Budget_prevu': 0,
-                'Depenses_reelles': depenses_nationales
-            }])
-            df_province = pd.concat([df_province, ligne_nationale], ignore_index=True)
+    # Ajouter les entités qui ont des dépenses mais pas de budget prévu (cas exceptionnel)
+    entites_sans_budget = depenses_par_entite[
+        ~depenses_par_entite['Province'].isin(df_budget_prov['Province'])
+    ]
+    if len(entites_sans_budget) > 0:
+        entites_sans_budget = entites_sans_budget.copy()
+        entites_sans_budget['Budget_prevu'] = 0
+        df_province = pd.concat([df_province, entites_sans_budget], ignore_index=True)
     
     df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
     df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
     
+    # Taux d'absorption
     df_province['Taux_absorption'] = df_province.apply(
         lambda row: round((row['Depenses_reelles'] / row['Budget_prevu'] * 100), 1) 
         if row['Budget_prevu'] > 0 else 0,
         axis=1
     )
     
-    def statut_province(taux):
-        if taux >= 90:
+    # Trier : National en premier, puis provinces alphabétiques
+    df_province['_ordre'] = df_province['Province'].apply(
+        lambda x: 0 if 'National' in str(x) else 1
+    )
+    df_province = df_province.sort_values(['_ordre', 'Province']).drop(columns='_ordre').reset_index(drop=True)
+    
+    # Statut
+    def statut_entite(taux, depenses):
+        if depenses == 0:
+            return '⚪ Aucune dépense'
+        elif taux >= 90:
             return '🟢 Excellent'
         elif taux >= 80:
             return '💧 Bon'
         elif taux >= 50:
             return '🟡 Moyen'
-        elif taux > 0:
-            return '🔴 Faible'
         else:
-            return '⚪ Aucune dépense'
+            return '🔴 Faible'
     
-    df_province['Statut'] = df_province['Taux_absorption'].apply(statut_province)
+    df_province['Statut'] = df_province.apply(
+        lambda row: statut_entite(row['Taux_absorption'], row['Depenses_reelles']),
+        axis=1
+    )
     
+    # ========== AFFICHAGE DU TABLEAU ==========
     df_affichage = df_province[[
         'Province', 'Budget_prevu', 'Depenses_reelles',
         'Reste_a_depenser', 'Taux_absorption', 'Statut'
     ]].copy()
     
     df_affichage.columns = [
-        'Province', 'Budget prévu ($)', 'Dépenses réelles ($)',
+        'Province / Niveau', 'Budget prévu ($)', 'Dépenses réelles ($)',
         'Reste à dépenser ($)', 'Taux absorption (%)', 'Statut'
     ]
+    
+    # Remplacer "National" par un libellé plus clair
+    df_affichage['Province / Niveau'] = df_affichage['Province / Niveau'].apply(
+        lambda x: '🌍 National (central)' if str(x) == 'National' else x
+    )
     
     df_affichage['Budget prévu ($)'] = df_affichage['Budget prévu ($)'].apply(lambda x: f"${x:,.2f}")
     df_affichage['Dépenses réelles ($)'] = df_affichage['Dépenses réelles ($)'].apply(lambda x: f"${x:,.2f}")
     df_affichage['Reste à dépenser ($)'] = df_affichage['Reste à dépenser ($)'].apply(lambda x: f"${x:,.2f}")
     df_affichage['Taux absorption (%)'] = df_affichage['Taux absorption (%)'].apply(lambda x: f"{x:.1f}%")
     
+    # Ligne TOTAL
     budget_total_reel = df_province['Budget_prevu'].sum()
     depenses_total_reel = df_province['Depenses_reelles'].sum()
     reste_total = budget_total_reel - depenses_total_reel
     taux_global = (depenses_total_reel / budget_total_reel * 100) if budget_total_reel > 0 else 0
     
     total_row = pd.DataFrame([{
-        'Province': '**TOTAL**',
+        'Province / Niveau': '**TOTAL**',
         'Budget prévu ($)': f"${budget_total_reel:,.2f}",
         'Dépenses réelles ($)': f"${depenses_total_reel:,.2f}",
         'Reste à dépenser ($)': f"${reste_total:,.2f}",
@@ -2115,12 +2136,19 @@ def show_finances_par_province(df_fin, budget_total):
     df_affichage_final = pd.concat([df_affichage, total_row], ignore_index=True)
     
     def colorer_ligne(row):
+        entity_str = str(row['Province / Niveau'])
         taux_str = str(row['Taux absorption (%)'])
-        province_str = str(row['Province'])
+        
+        # Ligne Nationale : fond bleu clair distinctif
+        if 'National' in entity_str:
+            return ['background-color: #e7f3ff; color: #004085; font-weight: bold;'] * len(row)
+        
+        # Ligne TOTAL : fond gris
+        if 'TOTAL' in entity_str:
+            return ['background-color: #f0f2f6; color: #000000; font-weight: bold;'] * len(row)
+        
+        # Provinces : couleur selon taux
         try:
-            # Ligne Nationale : couleur spéciale
-            if 'National' in province_str:
-                return ['background-color: #e7f3ff; color: #004085; font-weight: bold;'] * len(row)
             taux = float(taux_str.replace('%', ''))
             if taux >= 90:
                 return ['background-color: #d4edda; color: #155724;'] * len(row)
@@ -2137,51 +2165,44 @@ def show_finances_par_province(df_fin, budget_total):
     
     styled_df = df_affichage_final.style.apply(colorer_ligne, axis=1)
     
-    st.dataframe(styled_df, use_container_width=True, height=450)
+    st.dataframe(styled_df, use_container_width=True, height=500)
     
-    depenses_totales = df_fin['depenses'].sum()
-    depenses_par_province_total = df_fin_province['depenses'].sum() if len(df_fin_province) > 0 else 0
-    depenses_non_affectees = depenses_totales - depenses_par_province_total
+    st.caption("ℹ️ **National (central)** est le budget consommé au niveau central, indépendamment des provinces. Il est intégré dans la ligne TOTAL.")
     
-    if depenses_non_affectees > 0:
-        st.success(f"""
-        ✅ **Dépenses au niveau National (central) intégrées** : ${depenses_non_affectees:,.2f}
-        
-        Ces dépenses apparaissent dans la ligne **🌍 National (central)** du tableau ci-dessus.
-        Elles concernent les activités réalisées au niveau central et ne sont pas ventilées par province.
-        """)
-    
-    st.markdown("### 📈 Synthèse par province")
+    # ========== SYNTHÈSE ==========
+    st.markdown("### 📈 Synthèse")
     
     col1, col2, col3, col4 = st.columns(4)
     
-    # Exclure la ligne Nationale des statistiques "par province"
-    df_province_seulement = df_province[~df_province['Province'].str.contains('National', na=False)].copy()
-    
-    nb_provinces_bonnes = len(df_province_seulement[df_province_seulement['Taux_absorption'] >= 80])
-    nb_provinces_moyennes = len(df_province_seulement[(df_province_seulement['Taux_absorption'] >= 50) & (df_province_seulement['Taux_absorption'] < 80)])
-    nb_provinces_faibles = len(df_province_seulement[(df_province_seulement['Taux_absorption'] > 0) & (df_province_seulement['Taux_absorption'] < 50)])
-    nb_provinces_vides = len(df_province_seulement[df_province_seulement['Taux_absorption'] == 0])
+    # Statistiques séparées : National vs Provinces
+    df_national = df_province[df_province['Province'] == 'National']
+    df_provinces = df_province[df_province['Province'] != 'National']
     
     with col1:
-        st.metric("🟢 Provinces ≥ 80%", f"{nb_provinces_bonnes}/{len(df_province_seulement)}")
+        budget_nat = df_national['Budget_prevu'].sum() if len(df_national) > 0 else 0
+        st.metric("🌍 Budget National (central)", f"${budget_nat:,.0f}")
     with col2:
-        st.metric("🟡 Provinces 50-79%", f"{nb_provinces_moyennes}/{len(df_province_seulement)}")
+        dep_nat = df_national['Depenses_reelles'].sum() if len(df_national) > 0 else 0
+        taux_nat = (dep_nat / budget_nat * 100) if budget_nat > 0 else 0
+        st.metric("💸 Dépenses Nationales", f"${dep_nat:,.0f}",
+                 delta=f"{taux_nat:.1f}% absorbé")
     with col3:
-        st.metric("🔴 Provinces < 50%", f"{nb_provinces_faibles}/{len(df_province_seulement)}")
+        budget_prov = df_provinces['Budget_prevu'].sum() if len(df_provinces) > 0 else 0
+        st.metric("🏥 Budget Provinces", f"${budget_prov:,.0f}",
+                 delta=f"{len(df_provinces)} provinces")
     with col4:
-        st.metric("⚪ Sans dépense", f"{nb_provinces_vides}/{len(df_province_seulement)}")
+        dep_prov = df_provinces['Depenses_reelles'].sum() if len(df_provinces) > 0 else 0
+        taux_prov = (dep_prov / budget_prov * 100) if budget_prov > 0 else 0
+        st.metric("💸 Dépenses Provinces", f"${dep_prov:,.0f}",
+                 delta=f"{taux_prov:.1f}% absorbé")
     
-    st.markdown("### 📊 Visualisation du budget par province")
+    # ========== GRAPHIQUES ==========
+    st.markdown("### 📊 Visualisation")
     
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
-        # Inclure les provinces avec budget + la ligne Nationale si elle a des dépenses
-        df_graph = df_province[
-            (df_province['Budget_prevu'] > 0) | 
-            (df_province['Province'].str.contains('National', na=False) & (df_province['Depenses_reelles'] > 0))
-        ].copy()
+        df_graph = df_province[df_province['Budget_prevu'] > 0].copy()
         
         if len(df_graph) > 0:
             fig = go.Figure()
@@ -2202,18 +2223,17 @@ def show_finances_par_province(df_fin, budget_total):
                 textposition='outside'
             ))
             fig.update_layout(
-                title='Budget prévu vs Dépenses réelles par province',
+                title='Budget prévu vs Dépenses réelles',
                 xaxis_title='Province / Niveau',
                 yaxis_title='Montant ($)',
                 barmode='group',
-                height=450,
+                height=500,
                 xaxis_tickangle=45,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig, use_container_width=True)
     
     with col_g2:
-        # Le taux d'absorption n'a de sens que pour les provinces (avec budget prévu)
         df_taux = df_province[df_province['Budget_prevu'] > 0].copy()
         
         if len(df_taux) > 0:
@@ -2224,20 +2244,22 @@ def show_finances_par_province(df_fin, budget_total):
                 x=df_taux['Taux_absorption'],
                 y=df_taux['Province'],
                 orientation='h',
-                marker_color=df_taux['Taux_absorption'].apply(
-                    lambda x: '#28a745' if x >= 90 
-                    else '#17becf' if x >= 80 
-                    else '#ffc107' if x >= 50 
-                    else '#dc3545'
+                marker_color=df_taux.apply(
+                    lambda row: '#1f77b4' if row['Province'] == 'National'
+                    else ('#28a745' if row['Taux_absorption'] >= 90 
+                    else '#17becf' if row['Taux_absorption'] >= 80 
+                    else '#ffc107' if row['Taux_absorption'] >= 50 
+                    else '#dc3545'),
+                    axis=1
                 ),
                 text=df_taux['Taux_absorption'].apply(lambda x: f"{x:.1f}%"),
                 textposition='outside'
             ))
             fig_taux.update_layout(
-                title="Taux d'absorption par province (%)",
+                title="Taux d'absorption (%)",
                 xaxis_title="Taux d'absorption (%)",
                 yaxis_title="",
-                height=450,
+                height=500,
                 xaxis_range=[0, 120],
                 showlegend=False
             )
@@ -2245,28 +2267,26 @@ def show_finances_par_province(df_fin, budget_total):
                               annotation_text="Cible 80%")
             st.plotly_chart(fig_taux, use_container_width=True)
     
+    # ========== SUIVI MENSUEL PAR ENTITÉ ==========
     st.markdown("---")
-    st.markdown("### 📅 Suivi budgétaire mensuel par province")
-    st.markdown("Comparaison du **budget prévu mensuel** vs **dépenses réelles** pour chaque province")
+    st.markdown("### 📅 Suivi budgétaire mensuel par entité")
+    st.markdown("Comparaison du **budget prévu mensuel** vs **dépenses réelles** mois par mois")
     
-    # Exclure la ligne Nationale du sélecteur (pas de budget mensuel par province pour le National)
-    provinces_disponibles = sorted([
-        p for p in df_province['Province'].dropna().unique().tolist() 
-        if 'National' not in str(p)
-    ])
-    province_selectionnee = st.selectbox(
-        "Sélectionnez une province pour voir le détail mensuel",
-        options=provinces_disponibles,
-        key="select_province_finance"
+    entites_disponibles = sorted(df_province['Province'].dropna().unique().tolist())
+    entite_selectionnee = st.selectbox(
+        "Sélectionnez une entité (province ou National)",
+        options=entites_disponibles,
+        key="select_entite_finance",
+        format_func=lambda x: '🌍 National (central)' if x == 'National' else x
     )
     
-    if province_selectionnee:
+    if entite_selectionnee:
         df_budget_prov_mois = df_budget_long[
-            df_budget_long['province_name'] == province_selectionnee
+            df_budget_long['province_name'] == entite_selectionnee
         ].copy()
         
-        df_dep_prov = df_fin[
-            df_fin['province_name'] == province_selectionnee
+        df_dep_prov = df_fin_clean[
+            df_fin_clean['province_name'] == entite_selectionnee
         ].copy()
         
         if len(df_dep_prov) > 0 and 'mois_annee' in df_dep_prov.columns:
@@ -2306,6 +2326,8 @@ def show_finances_par_province(df_fin, budget_total):
         
         col_gm1, col_gm2 = st.columns(2)
         
+        libelle_entite = '🌍 National (central)' if entite_selectionnee == 'National' else entite_selectionnee
+        
         with col_gm1:
             fig_mois = go.Figure()
             fig_mois.add_trace(go.Bar(
@@ -2325,7 +2347,7 @@ def show_finances_par_province(df_fin, budget_total):
                 textposition='outside'
             ))
             fig_mois.update_layout(
-                title=f'Budget prévu vs Dépenses - {province_selectionnee}',
+                title=f'Budget prévu vs Dépenses - {libelle_entite}',
                 xaxis_title='Mois',
                 yaxis_title='Montant ($)',
                 barmode='group',
@@ -2349,7 +2371,7 @@ def show_finances_par_province(df_fin, budget_total):
                 textposition='outside'
             ))
             fig_taux_mois.update_layout(
-                title=f"Taux d'absorption mensuel - {province_selectionnee}",
+                title=f"Taux d'absorption mensuel - {libelle_entite}",
                 xaxis_title='Mois',
                 yaxis_title='Taux (%)',
                 height=400,
@@ -2361,18 +2383,19 @@ def show_finances_par_province(df_fin, budget_total):
                                     annotation_text="Cible 100%")
             st.plotly_chart(fig_taux_mois, use_container_width=True)
     
+    # ========== EXPORT ==========
     st.markdown("---")
     col_export1, col_export2 = st.columns(2)
     with col_export1:
         st.download_button(
-            label="📥 Télécharger le suivi par province (CSV)",
+            label="📥 Télécharger le suivi (CSV)",
             data=df_affichage_final.to_csv(index=False).encode('utf-8'),
             file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
     with col_export2:
         st.download_button(
-            label="📥 Télécharger le suivi par province (Excel)",
+            label="📥 Télécharger le suivi (Excel)",
             data=to_excel(df_affichage_final),
             file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2466,7 +2489,7 @@ def show_finances_tab(df_main):
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
     
-    # ========== LECTURE DYNAMIQUE DU BUDGET (10 mois) ==========
+    # ========== LECTURE DYNAMIQUE DU BUDGET ==========
     budget_total = get_budget_total()
     
     if budget_total == 0:
@@ -2506,7 +2529,7 @@ def show_finances_tab(df_main):
                 <td>{date_debut.strftime('%B %Y')} → {date_fin.strftime('%B %Y')}</td>
             </tr>
             <tr>
-                <td><strong>Budget total (10 mois) :</strong></td>
+                <td><strong>Budget total (provinces + National) :</strong></td>
                 <td><strong>{budget_total:,.0f} USD</strong></td>
                 <td><strong>Période d'affichage :</strong></td>
                 <td>{pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_debut']).strftime('%B %Y')} → {pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_fin']).strftime('%B %Y')} ({nb_mois_affichage} mois)</td>
@@ -2694,7 +2717,8 @@ def show_finances_tab(df_main):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("💰 Budget total projet (10 mois)", f"${budget_total:,.0f}")
+        st.metric("💰 Budget total projet", f"${budget_total:,.0f}",
+                 help="Provinces + National (10 mois)")
     with col2:
         st.metric("💸 Dépenses cumulées", f"${depenses_totales:,.2f}",
                  delta=f"{(depenses_totales/budget_total*100):.1f}% du budget" if budget_total > 0 else None)
@@ -2775,7 +2799,7 @@ def show_finances_tab(df_main):
         st.metric("📊 Taux traitement DP", f"{taux_traitement_dp:.1f}%",
                  delta=delta_dp, delta_color=color_dp)
     
-    # ========== SUIVI PAR PROVINCE ==========
+    # ========== SUIVI PAR PROVINCE + NATIONAL ==========
     show_finances_par_province(df_fin, budget_total)
     
     st.markdown("---")
@@ -2803,7 +2827,7 @@ def show_finances_tab(df_main):
             mois_str = mois.strftime('%B %Y')
             mois_annee_str = mois.strftime('%Y-%m')
             
-            # Prévision du mois = somme des budgets de toutes les provinces pour ce mois
+            # Prévision du mois = somme des budgets de toutes les entités pour ce mois
             prevision_ce_mois = get_prevision_mois(mois_annee_str)
             
             # Dépenses du mois = SOMME mensuel + hebdo
@@ -2850,9 +2874,9 @@ def show_finances_tab(df_main):
             'Statut': '📊 Bilan'
         }])
         
-        # Ligne d'information sur le budget total du projet (10 mois)
+        # Ligne d'information sur le budget total du projet
         info_row = pd.DataFrame([{
-            'Mois': '💰 Budget total projet (10 mois)',
+            'Mois': '💰 Budget total projet (provinces + National)',
             'Prévision mensuelle ($)': budget_total,
             'Dépenses réelles ($)': depenses_totales,
             'Écart ($)': budget_total - depenses_totales,
@@ -2951,7 +2975,7 @@ def show_finances_tab(df_main):
                     file_name=f"suivi_hebdomadaire_budget_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
-            with col2_export:
+            with col_export2:
                 st.download_button(
                     label="📥 Télécharger le suivi hebdomadaire (Excel)",
                     data=to_excel(df_hebdo),
