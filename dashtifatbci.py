@@ -593,10 +593,33 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
 ])
 
 # ============================================================
-# TAB 1 à 8 : inchangés (identiques à la version précédente)
+# TAB 1 : CASCADE DE DÉPISTAGE (CORRIGÉE)
 # ============================================================
 with tab1:
     st.header(f"📋 Cascade de Dépistage des Contacts - {periode_texte}")
+
+    # Calcul des totaux bruts
+    total_index = int(df_filtered['index_total'].sum()) if not df_filtered.empty and 'index_total' in df_filtered.columns else 0
+    total_index_inv = int(df_filtered['index_total_investigue'].sum()) if not df_filtered.empty and 'index_total_investigue' in df_filtered.columns else 0
+    total_cf_rep = int(df_filtered['cf_rep_total'].sum()) if not df_filtered.empty else 0
+    total_cf_inv = int(df_filtered['cf_inv_total'].sum()) if not df_filtered.empty else 0
+    total_tb_pres = int(df_filtered['tb_presume_total'].sum()) if not df_filtered.empty and 'tb_presume_total' in df_filtered.columns else 0
+    total_tb_or = int(df_filtered['tb_oriente_cdt_total'].sum()) if not df_filtered.empty and 'tb_oriente_cdt_total' in df_filtered.columns else 0
+
+    # Calcul des pourcentages logiques pour la cascade
+    # Étape 1 & 2 : Index
+    pct_index_inv = (total_index_inv / total_index * 100) if total_index > 0 else 0
+    
+    # Étape 3 & 4 : Contacts (Base = Contacts répertoriés)
+    # On affiche 100% pour les contacts répertoriés car c'est la base de cette sous-cascade
+    pct_cf_rep = 100.0 
+    pct_cf_inv = (total_cf_inv / total_cf_rep * 100) if total_cf_rep > 0 else 0
+    
+    # Étape 5 : Cas présumés (Base = Contacts investigués)
+    pct_tb_pres = (total_tb_pres / total_cf_inv * 100) if total_cf_inv > 0 else 0
+    
+    # Étape 6 : TB orientée CDT (Base = Cas présumés)
+    pct_tb_or = (total_tb_or / total_tb_pres * 100) if total_tb_pres > 0 else 0
 
     cascade_data = {
         "Étape": [
@@ -608,43 +631,57 @@ with tab1:
             "TB présumée orientée vers CDT"
         ],
         "Nombre": [
-            int(df_filtered['index_total'].sum()) if not df_filtered.empty and 'index_total' in df_filtered.columns else 0,
-            int(df_filtered['index_total_investigue'].sum()) if not df_filtered.empty and 'index_total_investigue' in df_filtered.columns else 0,
-            int(df_filtered['cf_rep_total'].sum()) if not df_filtered.empty else 0,
-            int(df_filtered['cf_inv_total'].sum()) if not df_filtered.empty else 0,
-            int(df_filtered['tb_presume_total'].sum()) if not df_filtered.empty and 'tb_presume_total' in df_filtered.columns else 0,
-            int(df_filtered['tb_oriente_cdt_total'].sum()) if not df_filtered.empty and 'tb_oriente_cdt_total' in df_filtered.columns else 0
+            total_index,
+            total_index_inv,
+            total_cf_rep,
+            total_cf_inv,
+            total_tb_pres,
+            total_tb_or
+        ],
+        "Pourcentage": [
+            "100%",
+            f"{pct_index_inv:.1f}%",
+            "100%", # Base pour les contacts
+            f"{pct_cf_inv:.1f}%",
+            f"{pct_tb_pres:.1f}%",
+            f"{pct_tb_or:.1f}%"
         ]
     }
     df_cascade = pd.DataFrame(cascade_data)
 
     col1, col2 = st.columns([2, 1])
     with col1:
+        # Graphique en barres avec les bons pourcentages
         fig = px.bar(df_cascade, x="Étape", y="Nombre",
                      title="Cascade de Dépistage des Contacts TB",
                      color="Nombre", color_continuous_scale="Blues",
-                     text="Nombre")
+                     text="Pourcentage") # On affiche le % corrigé sur les barres
         fig.update_traces(textposition="outside")
         fig.update_layout(xaxis_tickangle=-45, height=500)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.metric("Total contacts répertoriés", f"{total_contacts:,}")
-        st.metric("Total contacts investigués", f"{total_invest:,}")
-        st.metric("Taux d'investigation", f"{pct_invest:.1f}%")
-        st.metric("Cas présumés TB", f"{df_cascade['Nombre'].iloc[4]:,}")
+        st.metric("Total contacts répertoriés", f"{total_cf_rep:,}")
+        st.metric("Total contacts investigués", f"{total_cf_inv:,}")
+        st.metric("Taux d'investigation (Contacts)", f"{pct_cf_inv:.1f}%")
+        st.metric("Cas présumés TB", f"{total_tb_pres:,}")
 
     st.subheader("📊 Entonnoir de la cascade")
+    # Correction de l'entonnoir pour utiliser les pourcentages personnalisés
     fig_funnel = go.Figure(go.Funnel(
         y=cascade_data["Étape"],
         x=cascade_data["Nombre"],
         textposition="inside",
-        textinfo="value+percent initial",
+        textinfo="value+text", # Affiche la valeur numérique ET le texte personnalisé
+        text=cascade_data["Pourcentage"], # Utilise les % corrigés
         marker={"color": px.colors.sequential.Blues_r}
     ))
     fig_funnel.update_layout(height=500)
     st.plotly_chart(fig_funnel, use_container_width=True)
 
+# ============================================================
+# TAB 2 : DIAGNOSTIC TB
+# ============================================================
 with tab2:
     st.header(f"🔬 Diagnostic de la Tuberculose - {periode_texte}")
 
@@ -681,6 +718,9 @@ with tab2:
                  barmode="group", title="TB confirmées par âge et sexe")
     st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# TAB 3 : CO-INFECTION VIH/TB
+# ============================================================
 with tab3:
     st.header(f"🦠 Co-infection VIH/TB - {periode_texte}")
 
@@ -710,6 +750,9 @@ with tab3:
         else:
             st.metric("Prévalence VIH", "0%")
 
+# ============================================================
+# TAB 4 : PRISE EN CHARGE
+# ============================================================
 with tab4:
     st.header(f"💊 Prise en charge des cas TB - {periode_texte}")
 
@@ -741,6 +784,9 @@ with tab4:
         fig.update_layout(height=250)
         st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# TAB 5 : TPT
+# ============================================================
 with tab5:
     st.header(f"💉 Cascade du Traitement Préventif (TPT) - {periode_texte}")
 
@@ -782,6 +828,9 @@ with tab5:
     fig_funnel.update_layout(height=400)
     st.plotly_chart(fig_funnel, use_container_width=True)
 
+# ============================================================
+# TAB 6 : PERFORMANCE PAR ZONE
+# ============================================================
 with tab6:
     st.header(f"📊 Performance par Zone de Santé - {periode_texte}")
 
@@ -838,6 +887,9 @@ with tab6:
     else:
         st.info("Aucune donnée disponible")
 
+# ============================================================
+# TAB 7 : TABLEAU PERSONNALISÉ
+# ============================================================
 with tab7:
     st.header(f"📋 Tableau personnalisé - {periode_texte}")
 
@@ -870,6 +922,9 @@ with tab7:
     else:
         st.info("Sélectionnez des indicateurs pour afficher le tableau")
 
+# ============================================================
+# TAB 8 : COMPLÉTUDE
+# ============================================================
 with tab8:
     df_comp = df_filtered
 
