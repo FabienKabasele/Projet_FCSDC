@@ -60,6 +60,31 @@ st.markdown("""
         text-align: center;
         font-weight: bold;
     }
+    .info-box {
+        background-color: #e7f3ff;
+        padding: 0.8rem;
+        border-radius: 8px;
+        border-left: 5px solid #1f77b4;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+    .warning-box {
+        background-color: #fff3cd;
+        padding: 0.8rem;
+        border-radius: 8px;
+        border-left: 5px solid #ffc107;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+    .formula-box {
+        background-color: #f8f9fa;
+        padding: 0.5rem 0.8rem;
+        border-radius: 5px;
+        border-left: 3px solid #6c757d;
+        font-family: monospace;
+        font-size: 0.85rem;
+        margin: 0.5rem 0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -72,17 +97,15 @@ st.markdown('<div class="main-header"><h1>🩺 Stop TB - Tableau de Bord FCSDS</
 
 PROJET_CONFIG = {
     'date_debut': '2026-06-01',
-    'date_fin': '2027-03-31',   # Budget total sur 10 mois
+    'date_fin': '2027-03-31',
     'nom_projet': 'Stop TB - FCSDS'
 }
 
-# Période d'affichage du suivi budgétaire (6 mois)
 PROJET_CONFIG_AFFICHAGE = {
     'date_debut': '2026-06-01',
     'date_fin': '2026-11-30'
 }
 
-# Nombre de mois sur lesquels le budget est consommé (pour calcul des prévisions moyennes)
 NB_MOIS_CONSOMMATION = 6
 
 # ============================================================================
@@ -95,7 +118,6 @@ PASSWORDS = {
 }
 
 def check_password(password_key, session_key=None):
-    """Vérifie le mot de passe et stocke l'état dans session_state"""
     if session_key is None:
         session_key = password_key
     
@@ -142,39 +164,16 @@ COLUMN_RENAME_MAP = {
     'q1_0_h': 'Depistage_Hommes', 'q1_0_f': 'Depistage_Femmes',
     'q1_0_hf_total': 'Depistage_Total', 'q1_0_age15m': 'Depistage_0_15_ans',
     'q1_0_age15p': 'Depistage_plus_15_ans', 'q1_0_age_total': 'Depistage_Tous_ages',
-    'q1_0_niv_sante': 'Depistage_Niveau_sante', 'q1_0_niv_com': 'Depistage_Niveau_communautaire',
-    'q1_0_niv_total': 'Depistage_Niveau_total', 'q1_1_h': 'Symptomatiques_Hommes',
-    'q1_1_f': 'Symptomatiques_Femmes', 'q1_1_hf_total': 'Symptomatiques_Total',
-    'q1_1_age15m': 'Symptomatiques_0_15_ans', 'q1_1_age15p': 'Symptomatiques_plus_15_ans',
-    'q1_1_age_total': 'Symptomatiques_Tous_ages', 'q1_1_niv_sante': 'Symptomatiques_Niveau_sante',
-    'q1_1_niv_com': 'Symptomatiques_Niveau_communautaire', 'q1_1_niv_total': 'Symptomatiques_Niveau_total',
     'q1_2_h': 'Cas_presumes_Hommes', 'q1_2_f': 'Cas_presumes_Femmes',
-    'q1_2_hf_total': 'Cas_presumes_Total', 'q1_2_age15m': 'Cas_presumes_0_15_ans',
-    'q1_2_age15p': 'Cas_presumes_plus_15_ans', 'q1_2_age_total': 'Cas_presumes_Tous_ages',
-    'q1_2_niv_sante': 'Cas_presumes_Niveau_sante', 'q1_2_niv_com': 'Cas_presumes_Niveau_communautaire',
-    'q1_2_niv_total': 'Cas_presumes_Niveau_total', 'q1_3_h': 'Examens_realises_Hommes',
-    'q1_3_f': 'Examens_realises_Femmes', 'q1_3_hf_total': 'Examens_realises_Total',
-    'q1_3_age15m': 'Examens_realises_0_15_ans', 'q1_3_age15p': 'Examens_realises_plus_15_ans',
-    'q1_3_age_total': 'Examens_realises_Tous_ages', 'q1_3_niv_sante': 'Examens_realises_Niveau_sante',
-    'q1_3_niv_com': 'Examens_realises_Niveau_communautaire', 'q1_3_niv_total': 'Examens_realises_Niveau_total',
-    'q1_4_h': 'Eligibles_Xpert_Hommes', 'q1_4_f': 'Eligibles_Xpert_Femmes',
-    'q1_4_hf_total': 'Eligibles_Xpert_Total', 'q1_4_age15m': 'Eligibles_Xpert_0_15_ans',
-    'q1_4_age15p': 'Eligibles_Xpert_plus_15_ans', 'q1_4_age_total': 'Eligibles_Xpert_Tous_ages',
+    'q1_2_hf_total': 'Cas_presumes_Total',
     'q1_5_h': 'Testes_Xpert_Hommes', 'q1_5_f': 'Testes_Xpert_Femmes',
-    'q1_5_hf_total': 'Testes_Xpert_Total', 'q1_5_age15m': 'Testes_Xpert_0_15_ans',
-    'q1_5_age15p': 'Testes_Xpert_plus_15_ans', 'q1_5_age_total': 'Testes_Xpert_Tous_ages',
+    'q1_5_hf_total': 'Testes_Xpert_Total',
     'q2_0_h': 'TB_detectee_Hommes', 'q2_0_f': 'TB_detectee_Femmes',
-    'q2_0_hf_total': 'TB_detectee_Total', 'q2_0_age15m': 'TB_detectee_0_15_ans',
-    'q2_0_age15p': 'TB_detectee_plus_15_ans', 'q2_0_age_total': 'TB_detectee_Tous_ages',
-    'q2_1_h': 'TB_confirmee_bacterio_Hommes', 'q2_1_f': 'TB_confirmee_bacterio_Femmes',
-    'q2_1_hf_total': 'TB_confirmee_bacterio_Total', 'q2_1_age15m': 'TB_confirmee_bacterio_0_15_ans',
-    'q2_1_age15p': 'TB_confirmee_bacterio_plus_15_ans', 'q2_1_age_total': 'TB_confirmee_bacterio_Tous_ages',
-    'q2_2_h': 'TB_confirmee_clinique_Hommes', 'q2_2_f': 'TB_confirmee_clinique_Femmes',
-    'q2_2_hf_total': 'TB_confirmee_clinique_Total', 'q2_2_age15m': 'TB_confirmee_clinique_0_15_ans',
-    'q2_2_age15p': 'TB_confirmee_clinique_plus_15_ans', 'q2_2_age_total': 'TB_confirmee_clinique_Tous_ages',
+    'q2_0_hf_total': 'TB_detectee_Total',
+    'q2_1_hf_total': 'TB_confirmee_bacterio_Total',
+    'q2_2_hf_total': 'TB_confirmee_clinique_Total',
     'q3_0_h': 'Traitement_DS_debute_Hommes', 'q3_0_f': 'Traitement_DS_debute_Femmes',
-    'q3_0_hf_total': 'Traitement_DS_debute_Total', 'q3_0_age15m': 'Traitement_DS_debute_0_15_ans',
-    'q3_0_age15p': 'Traitement_DS_debute_plus_15_ans', 'q3_0_age_total': 'Traitement_DS_debute_Tous_ages',
+    'q3_0_hf_total': 'Traitement_DS_debute_Total',
     'q3_4_g04': 'Nouveaux_cas_0_4_ans_Hommes', 'q3_4_g514': 'Nouveaux_cas_5_14_ans_Hommes',
     'q3_4_h1524': 'Nouveaux_cas_15_24_ans_Hommes', 'q3_4_h2534': 'Nouveaux_cas_25_34_ans_Hommes',
     'q3_4_h3544': 'Nouveaux_cas_35_44_ans_Hommes', 'q3_4_h4554': 'Nouveaux_cas_45_54_ans_Hommes',
@@ -183,66 +182,29 @@ COLUMN_RENAME_MAP = {
     'q3_4_f1524': 'Nouveaux_cas_15_24_ans_Femmes', 'q3_4_f2534': 'Nouveaux_cas_25_34_ans_Femmes',
     'q3_4_f3544': 'Nouveaux_cas_35_44_ans_Femmes', 'q3_4_f4554': 'Nouveaux_cas_45_54_ans_Femmes',
     'q3_4_f5564': 'Nouveaux_cas_55_64_ans_Femmes', 'q3_4_f65p': 'Nouveaux_cas_plus_65_ans_Femmes',
-    'q3_4_h_total': 'Nouveaux_cas_Total_Hommes', 'q3_4_f_total': 'Nouveaux_cas_Total_Femmes',
-    'q3_4_hf_total': 'Nouveaux_cas_Total_General', 'q4_0_h': 'Testes_resistance_Hommes',
-    'q4_0_f': 'Testes_resistance_Femmes', 'q4_0_hf_total': 'Testes_resistance_Total',
-    'q4_0_age15m': 'Testes_resistance_0_15_ans', 'q4_0_age15p': 'Testes_resistance_plus_15_ans',
-    'q4_0_age_total': 'Testes_resistance_Tous_ages', 'q4_1_h': 'Diagnostiques_RRMDR_Hommes',
-    'q4_1_f': 'Diagnostiques_RRMDR_Femmes', 'q4_1_hf_total': 'Diagnostiques_RRMDR_Total',
-    'q4_1_age15m': 'Diagnostiques_RRMDR_0_15_ans', 'q4_1_age15p': 'Diagnostiques_RRMDR_plus_15_ans',
-    'q4_1_age_total': 'Diagnostiques_RRMDR_Tous_ages', 'q5_0_h': 'Traitement_RRMDR_debute_Hommes',
-    'q5_0_f': 'Traitement_RRMDR_debute_Femmes', 'q5_0_hf_total': 'Traitement_RRMDR_debute_Total',
-    'q5_0_age15m': 'Traitement_RRMDR_debute_0_15_ans', 'q5_0_age15p': 'Traitement_RRMDR_debute_plus_15_ans',
-    'q5_0_age_total': 'Traitement_RRMDR_debute_Tous_ages', 'q6_0_h': 'Traitement_DS_reussi_Hommes',
-    'q6_0_f': 'Traitement_DS_reussi_Femmes', 'q6_0_hf_total': 'Traitement_DS_reussi_Total',
-    'q6_0_age15m': 'Traitement_DS_reussi_0_15_ans', 'q6_0_age15p': 'Traitement_DS_reussi_plus_15_ans',
-    'q6_0_age_total': 'Traitement_DS_reussi_Tous_ages', 'q7_0_h': 'Traitement_RRMDR_reussi_Hommes',
-    'q7_0_f': 'Traitement_RRMDR_reussi_Femmes', 'q7_0_hf_total': 'Traitement_RRMDR_reussi_Total',
-    'q7_0_age15m': 'Traitement_RRMDR_reussi_0_15_ans', 'q7_0_age15p': 'Traitement_RRMDR_reussi_plus_15_ans',
-    'q7_0_age_total': 'Traitement_RRMDR_reussi_Tous_ages', 'q8_0_h': 'TPT_depistage_Hommes',
-    'q8_0_f': 'TPT_depistage_Femmes', 'q8_0_hf_total': 'TPT_depistage_Total',
-    'q8_0_age5m': 'TPT_depistage_0_5_ans', 'q8_0_age5p': 'TPT_depistage_plus_5_ans',
-    'q8_0_age_total': 'TPT_depistage_Tous_ages', 'q8_1_h': 'TPT_contacts_Hommes',
-    'q8_1_f': 'TPT_contacts_Femmes', 'q8_1_hf_total': 'TPT_contacts_Total',
-    'q8_1_age5m': 'TPT_contacts_0_5_ans', 'q8_1_age5p': 'TPT_contacts_plus_5_ans',
-    'q8_1_age_total': 'TPT_contacts_Tous_ages', 'q8_2_h': 'TPT_PVVIH_Hommes',
-    'q8_2_f': 'TPT_PVVIH_Femmes', 'q8_2_hf_total': 'TPT_PVVIH_Total',
-    'q8_2_age5m': 'TPT_PVVIH_0_5_ans', 'q8_2_age5p': 'TPT_PVVIH_plus_5_ans',
-    'q8_2_age_total': 'TPT_PVVIH_Tous_ages', 'q8_3_h': 'TPT_autres_groupes_Hommes',
-    'q8_3_f': 'TPT_autres_groupes_Femmes', 'q8_3_hf_total': 'TPT_autres_groupes_Total',
-    'q8_3_age5m': 'TPT_autres_groupes_0_5_ans', 'q8_3_age5p': 'TPT_autres_groupes_plus_5_ans',
-    'q8_3_age_total': 'TPT_autres_groupes_Tous_ages', 'q8_4_h': 'TPT_eligibles_contacts_Hommes',
-    'q8_4_f': 'TPT_eligibles_contacts_Femmes', 'q8_4_hf_total': 'TPT_eligibles_contacts_Total',
-    'q8_4_age5m': 'TPT_eligibles_contacts_0_5_ans', 'q8_4_age5p': 'TPT_eligibles_contacts_plus_5_ans',
-    'q8_4_age_total': 'TPT_eligibles_contacts_Tous_ages', 'q8_5_h': 'TPT_eligibles_PVVIH_Hommes',
-    'q8_5_f': 'TPT_eligibles_PVVIH_Femmes', 'q8_5_hf_total': 'TPT_eligibles_PVVIH_Total',
-    'q8_5_age15m': 'TPT_eligibles_PVVIH_0_15_ans', 'q8_5_age15p': 'TPT_eligibles_PVVIH_plus_15_ans',
-    'q8_5_age_total': 'TPT_eligibles_PVVIH_Tous_ages', 'q8_6_h': 'TPT_eligibles_autres_Hommes',
-    'q8_6_f': 'TPT_eligibles_autres_Femmes', 'q8_6_hf_total': 'TPT_eligibles_autres_Total',
-    'q8_6_age5m': 'TPT_eligibles_autres_0_5_ans', 'q8_6_age5p': 'TPT_eligibles_autres_plus_5_ans',
-    'q8_6_age_total': 'TPT_eligibles_autres_Tous_ages', 'q9_0': 'TPT_commence_contacts',
-    'q9_1_h': 'TPT_commence_contacts_Hommes', 'q9_1_f': 'TPT_commence_contacts_Femmes',
-    'q9_1_hf_total': 'TPT_commence_contacts_Total', 'q9_1_age5m': 'TPT_commence_contacts_0_5_ans',
-    'q9_1_age5p': 'TPT_commence_contacts_plus_5_ans', 'q9_1_age_total': 'TPT_commence_contacts_Tous_ages',
-    'q9_2_h': 'TPT_commence_PVVIH_Hommes', 'q9_2_f': 'TPT_commence_PVVIH_Femmes',
-    'q9_2_hf_total': 'TPT_commence_PVVIH_Total', 'q9_2_age15m': 'TPT_commence_PVVIH_0_15_ans',
-    'q9_2_age15p': 'TPT_commence_PVVIH_plus_15_ans', 'q9_2_age_total': 'TPT_commence_PVVIH_Tous_ages',
-    'q9_3_h': 'TPT_commence_autres_Hommes', 'q9_3_f': 'TPT_commence_autres_Femmes',
-    'q9_3_hf_total': 'TPT_commence_autres_Total', 'q9_3_age5m': 'TPT_commence_autres_0_5_ans',
-    'q9_3_age5p': 'TPT_commence_autres_plus_5_ans', 'q9_3_age_total': 'TPT_commence_autres_Tous_ages',
-    'q10_0_h': 'TPT_termine_contacts_Hommes', 'q10_0_f': 'TPT_termine_contacts_Femmes',
-    'q10_0_hf_total': 'TPT_termine_contacts_Total', 'q10_0_age5m': 'TPT_termine_contacts_0_5_ans',
-    'q10_0_age5p': 'TPT_termine_contacts_plus_5_ans', 'q10_0_age_total': 'TPT_termine_contacts_Tous_ages',
-    'q10_1_h': 'TPT_termine_PVVIH_Hommes', 'q10_1_f': 'TPT_termine_PVVIH_Femmes',
-    'q10_1_hf_total': 'TPT_termine_PVVIH_Total', 'q10_1_age5m': 'TPT_termine_PVVIH_0_5_ans',
-    'q10_1_age5p': 'TPT_termine_PVVIH_plus_5_ans', 'q10_1_age_total': 'TPT_termine_PVVIH_Tous_ages',
-    'q10_2_h': 'TPT_termine_autres_Hommes', 'q10_2_f': 'TPT_termine_autres_Femmes',
-    'q10_2_hf_total': 'TPT_termine_autres_Total', 'q10_2_age5m': 'TPT_termine_autres_0_5_ans',
-    'q10_2_age5p': 'TPT_termine_autres_plus_5_ans', 'q10_2_age_total': 'TPT_termine_autres_Tous_ages',
-    'xpert_test_rate': 'Taux_test_Xpert', 'rrmdr_detection_rate': 'Taux_detection_RRMDR',
-    'tpt_coverage': 'Couverture_TPT', 'tpt_completion_rate': "Taux_achevement_TPT",
+    'q4_0_hf_total': 'Testes_resistance_Total',
+    'q4_1_hf_total': 'Diagnostiques_RRMDR_Total',
+    'q5_0_h': 'Traitement_RRMDR_debute_Hommes', 'q5_0_f': 'Traitement_RRMDR_debute_Femmes',
+    'q5_0_hf_total': 'Traitement_RRMDR_debute_Total',
+    'q6_0_hf_total': 'Traitement_DS_reussi_Total',
+    'q7_0_hf_total': 'Traitement_RRMDR_reussi_Total',
+    'q8_0_hf_total': 'TPT_depistage_Total', 'q8_0_age5m': 'TPT_depistage_0_5_ans',
+    'q8_0_age5p': 'TPT_depistage_plus_5_ans',
+    'q8_4_hf_total': 'TPT_eligibles_contacts_Total',
+    'q8_4_age5m': 'TPT_eligibles_contacts_0_5_ans',
+    'q8_4_age5p': 'TPT_eligibles_contacts_plus_5_ans',
+    'q8_5_hf_total': 'TPT_eligibles_PVVIH_Total',
+    'q8_6_hf_total': 'TPT_eligibles_autres_Total',
+    'q9_1_hf_total': 'TPT_commence_contacts_Total',
+    'q9_1_age5m': 'TPT_commence_contacts_0_5_ans',
+    'q9_2_hf_total': 'TPT_commence_PVVIH_Total',
+    'q9_3_hf_total': 'TPT_commence_autres_Total',
+    'q10_0_hf_total': 'TPT_termine_contacts_Total',
+    'q10_1_hf_total': 'TPT_termine_PVVIH_Total',
+    'q10_2_hf_total': 'TPT_termine_autres_Total',
     'tpt_eligible_total': 'TPT_Eligibles_Total', 'tpt_started_total': 'TPT_Commence_Total',
-    'tpt_completed_total': 'TPT_Termine_Total', 'enfants_moins_5_depistes': 'Enfants_moins_5_ans_depistes',
+    'tpt_completed_total': 'TPT_Termine_Total',
+    'enfants_moins_5_depistes': 'Enfants_moins_5_ans_depistes',
     'enfants_moins_5_eligibles': 'Enfants_moins_5_ans_eligibles',
     'enfants_moins_5_commences': 'Enfants_moins_5_ans_TPT_commence',
     'enfants_moins_5_termines': 'Enfants_moins_5_ans_TPT_termine',
@@ -310,23 +272,19 @@ def clean_province_name(name):
     name = str(name).strip()
     mapping = {
         'national': 'National',
-        'haut katanga': 'Haut Katanga', 'hautkatanga': 'Haut Katanga', 'katanga': 'Haut Katanga',
-        'haut lomami': 'Haut Lomami', 'hautlomami': 'Haut Lomami', 'lomami': 'Lomami',
+        'haut katanga': 'Haut Katanga', 'hautkatanga': 'Haut Katanga',
+        'haut lomami': 'Haut Lomami', 'hautlomami': 'Haut Lomami',
         'kasai oriental': 'Kasai Oriental', 'kasaioriental': 'Kasai Oriental',
         'kasai central': 'Kasai Central', 'kasaicentral': 'Kasai Central',
-        'lualaba': 'Lualaba', 'sud kivu': 'Sud Kivu', 'sudkivu': 'Sud Kivu',
-        'sankuru': 'Sankuru', 'tanganyika': 'Tanganyika'
+        'lualaba': 'Lualaba',
+        'sud kivu': 'Sud Kivu', 'sudkivu': 'Sud Kivu',
+        'sankuru': 'Sankuru',
+        'tanganyika': 'Tanganyika',
+        'lomami': 'Lomami',
     }
     name_clean = name.lower().strip()
     if name_clean in mapping:
         return mapping[name_clean]
-    if ' ' in name:
-        parts = name.split(' ', 1)
-        if len(parts) == 2:
-            code, nom = parts
-            nom_clean = nom.lower().strip()
-            if nom_clean in mapping:
-                return mapping[nom_clean]
     if name in mapping.values():
         return name
     return name
@@ -349,7 +307,6 @@ def safe_int_convert(value):
         return 0
 
 def convertir_mois_fr_en_standard(mois_str):
-    """Convertit 'juin-26' → '2026-06'"""
     mois_map_fr = {
         'janv': '01', 'janvier': '01',
         'févr': '02', 'fevr': '02', 'février': '02', 'fevrier': '02',
@@ -386,7 +343,6 @@ def convertir_mois_fr_en_standard(mois_str):
 
 @st.cache_data
 def load_budget_previsionnel():
-    """Charge le budget prévisionnel par province/niveau et par mois depuis le CSV"""
     try:
         df_budget = pd.read_csv(
             'budget_previsionnel.csv',
@@ -433,7 +389,6 @@ def load_budget_previsionnel():
 
 
 def get_budget_total():
-    """Récupère le budget total du projet (provinces + National) depuis le CSV"""
     df_budget, _ = load_budget_previsionnel()
     if len(df_budget) == 0:
         return 0
@@ -441,7 +396,6 @@ def get_budget_total():
 
 
 def get_prevision_mois(mois_str):
-    """Retourne la prévision totale (provinces + National) pour un mois donné"""
     df_budget, _ = load_budget_previsionnel()
     if len(df_budget) == 0:
         return 0
@@ -541,30 +495,18 @@ def load_and_process_data():
         if col in df.columns:
             df[col] = df[col].fillna(0)
     
+    # Totaux H/F
     df['q1_0_hf_total'] = df['q1_0_h'] + df['q1_0_f']
     df['q1_0_age_total'] = df['q1_0_age15m'] + df['q1_0_age15p']
-    df['q1_0_niv_total'] = df['q1_0_niv_sante'] + df['q1_0_niv_com']
     df['q1_1_hf_total'] = df['q1_1_h'] + df['q1_1_f']
-    df['q1_1_age_total'] = df['q1_1_age15m'] + df['q1_1_age15p']
-    df['q1_1_niv_total'] = df['q1_1_niv_sante'] + df['q1_1_niv_com']
     df['q1_2_hf_total'] = df['q1_2_h'] + df['q1_2_f']
-    df['q1_2_age_total'] = df['q1_2_age15m'] + df['q1_2_age15p']
-    df['q1_2_niv_total'] = df['q1_2_niv_sante'] + df['q1_2_niv_com']
     df['q1_3_hf_total'] = df['q1_3_h'] + df['q1_3_f']
-    df['q1_3_age_total'] = df['q1_3_age15m'] + df['q1_3_age15p']
-    df['q1_3_niv_total'] = df['q1_3_niv_sante'] + df['q1_3_niv_com']
     df['q1_4_hf_total'] = df['q1_4_h'] + df['q1_4_f']
-    df['q1_4_age_total'] = df['q1_4_age15m'] + df['q1_4_age15p']
     df['q1_5_hf_total'] = df['q1_5_h'] + df['q1_5_f']
-    df['q1_5_age_total'] = df['q1_5_age15m'] + df['q1_5_age15p']
     df['q2_0_hf_total'] = df['q2_0_h'] + df['q2_0_f']
-    df['q2_0_age_total'] = df['q2_0_age15m'] + df['q2_0_age15p']
     df['q2_1_hf_total'] = df['q2_1_h'] + df['q2_1_f']
-    df['q2_1_age_total'] = df['q2_1_age15m'] + df['q2_1_age15p']
     df['q2_2_hf_total'] = df['q2_2_h'] + df['q2_2_f']
-    df['q2_2_age_total'] = df['q2_2_age15m'] + df['q2_2_age15p']
     df['q3_0_hf_total'] = df['q3_0_h'] + df['q3_0_f']
-    df['q3_0_age_total'] = df['q3_0_age15m'] + df['q3_0_age15p']
     
     df['q3_4_h_total'] = (df['q3_4_g04'] + df['q3_4_g514'] + df['q3_4_h1524'] + 
                           df['q3_4_h2534'] + df['q3_4_h3544'] + df['q3_4_h4554'] + 
@@ -575,41 +517,23 @@ def load_and_process_data():
     df['q3_4_hf_total'] = df['q3_4_h_total'] + df['q3_4_f_total']
     
     df['q4_0_hf_total'] = df['q4_0_h'] + df['q4_0_f']
-    df['q4_0_age_total'] = df['q4_0_age15m'] + df['q4_0_age15p']
     df['q4_1_hf_total'] = df['q4_1_h'] + df['q4_1_f']
-    df['q4_1_age_total'] = df['q4_1_age15m'] + df['q4_1_age15p']
     df['q5_0_hf_total'] = df['q5_0_h'] + df['q5_0_f']
-    df['q5_0_age_total'] = df['q5_0_age15m'] + df['q5_0_age15p']
     df['q6_0_hf_total'] = df['q6_0_h'] + df['q6_0_f']
-    df['q6_0_age_total'] = df['q6_0_age15m'] + df['q6_0_age15p']
     df['q7_0_hf_total'] = df['q7_0_h'] + df['q7_0_f']
-    df['q7_0_age_total'] = df['q7_0_age15m'] + df['q7_0_age15p']
     df['q8_0_hf_total'] = df['q8_0_h'] + df['q8_0_f']
-    df['q8_0_age_total'] = df['q8_0_age5m'] + df['q8_0_age5p']
     df['q8_1_hf_total'] = df['q8_1_h'] + df['q8_1_f']
-    df['q8_1_age_total'] = df['q8_1_age5m'] + df['q8_1_age5p']
     df['q8_2_hf_total'] = df['q8_2_h'] + df['q8_2_f']
-    df['q8_2_age_total'] = df['q8_2_age5m'] + df['q8_2_age5p']
     df['q8_3_hf_total'] = df['q8_3_h'] + df['q8_3_f']
-    df['q8_3_age_total'] = df['q8_3_age5m'] + df['q8_3_age5p']
     df['q8_4_hf_total'] = df['q8_4_h'] + df['q8_4_f']
-    df['q8_4_age_total'] = df['q8_4_age5m'] + df['q8_4_age5p']
     df['q8_5_hf_total'] = df['q8_5_h'] + df['q8_5_f']
-    df['q8_5_age_total'] = df['q8_5_age15m'] + df['q8_5_age15p']
     df['q8_6_hf_total'] = df['q8_6_h'] + df['q8_6_f']
-    df['q8_6_age_total'] = df['q8_6_age5m'] + df['q8_6_age5p']
     df['q9_1_hf_total'] = df['q9_1_h'] + df['q9_1_f']
-    df['q9_1_age_total'] = df['q9_1_age5m'] + df['q9_1_age5p']
     df['q9_2_hf_total'] = df['q9_2_h'] + df['q9_2_f']
-    df['q9_2_age_total'] = df['q9_2_age15m'] + df['q9_2_age15p']
     df['q9_3_hf_total'] = df['q9_3_h'] + df['q9_3_f']
-    df['q9_3_age_total'] = df['q9_3_age5m'] + df['q9_3_age5p']
     df['q10_0_hf_total'] = df['q10_0_h'] + df['q10_0_f']
-    df['q10_0_age_total'] = df['q10_0_age5m'] + df['q10_0_age5p']
     df['q10_1_hf_total'] = df['q10_1_h'] + df['q10_1_f']
-    df['q10_1_age_total'] = df['q10_1_age5m'] + df['q10_1_age5p']
     df['q10_2_hf_total'] = df['q10_2_h'] + df['q10_2_f']
-    df['q10_2_age_total'] = df['q10_2_age5m'] + df['q10_2_age5p']
     
     df['tpt_eligible_total'] = df['q8_4_hf_total'] + df['q8_5_hf_total'] + df['q8_6_hf_total']
     df['tpt_started_total'] = df['q9_1_hf_total'] + df['q9_2_hf_total'] + df['q9_3_hf_total']
@@ -626,8 +550,6 @@ def load_and_process_data():
                                            df['q4_1_hf_total'] / df['q4_0_hf_total'] * 100, 0)
     df['tpt_coverage'] = np.where(df['tpt_eligible_total'] > 0,
                                   df['tpt_started_total'] / df['tpt_eligible_total'] * 100, 0)
-    df['tpt_completion_rate'] = np.where(df['tpt_started_total'] > 0,
-                                         df['tpt_completed_total'] / df['tpt_started_total'] * 100, 0)
     
     mois_map = {
         'mois_1': 'Janvier', 'mois_2': 'Février', 'mois_3': 'Mars',
@@ -943,6 +865,17 @@ def show_kpi_cards(df_filtered, niveau, df_previous=None, type_periode=None):
 def show_depistage_tab(df_filtered):
     st.subheader("📈 Cascade de dépistage et diagnostic")
     
+    # Infobulle explicative
+    st.markdown("""
+    <div class="info-box">
+        <strong>ℹ️ Comment lire cette cascade :</strong> Chaque étape montre la proportion de patients qui passe à l'étape suivante.
+        Le pourcentage affiché dans le graphique indique le taux de passage entre chaque étape (percent previous).
+        <br><br>
+        <strong>⚠️ À noter :</strong> Nous ne disposons pas encore d'estimation officielle des cas TB attendus dans la zone.
+        Le <em>taux de détection</em> affiché est un taux interne (parmi les testés), <strong>PAS</strong> une couverture en traitement au sens programme (cas mis en traitement / cas attendus).
+    </div>
+    """, unsafe_allow_html=True)
+    
     cascade_data = pd.DataFrame({
         'Étape': ['Personnes dépistées', 'Cas présumés TB', 'Testés (Xpert)', 'TB détectée', 'TB confirmée bactério'],
         'Nombre': [
@@ -950,7 +883,7 @@ def show_depistage_tab(df_filtered):
             df_filtered['q1_2_hf_total'].sum(),
             df_filtered['q1_5_hf_total'].sum(),
             df_filtered['q2_0_hf_total'].sum(),
-            df_filtered['q2_2_hf_total'].sum()
+            df_filtered['q2_1_hf_total'].sum()
         ]
     })
     
@@ -974,6 +907,21 @@ def show_depistage_tab(df_filtered):
         fig_sexe = px.bar(sexe_melted, x='Catégorie', y='Nombre', color='Sexe', 
                           barmode='group', title="Distribution par sexe")
         st.plotly_chart(fig_sexe, use_container_width=True)
+        
+        # Note sur la répartition par sexe
+        total_h = df_filtered['q1_0_h'].sum()
+        total_f = df_filtered['q1_0_f'].sum()
+        if total_h + total_f > 0:
+            pct_f = (total_f / (total_h + total_f)) * 100
+            if pct_f > 55:
+                st.markdown(f"""
+                <div class="warning-box">
+                    <strong>⚠️ Note sur la répartition :</strong> Les femmes représentent <strong>{pct_f:.1f}%</strong> des personnes dépistées sur cette période.
+                    Cela peut sembler différent de la tendance nationale historique (majorité d'hommes).
+                    <br>Plusieurs explications possibles : saisie initiale, dépistage ciblé (CPN/PTME), couverture géographique partielle.
+                    Un comparatif avec N-1 sera ajouté quand les données seront disponibles.
+                </div>
+                """, unsafe_allow_html=True)
     
     with col2:
         st.subheader("Répartition par âge")
@@ -988,7 +936,19 @@ def show_depistage_tab(df_filtered):
                          barmode='group', title="Distribution par âge")
         st.plotly_chart(fig_age, use_container_width=True)
     
+    st.markdown("---")
     st.subheader("🧬 Détection de la tuberculose résistante (RR/MDR)")
+    
+    st.markdown("""
+    <div class="info-box">
+        <strong>Formule du taux de détection RR/MDR :</strong>
+        <div class="formula-box">
+        Taux = (Diagnostiqués RR/MDR ÷ Testés pour résistance) × 100
+        </div>
+        <strong>⚠️ Ce taux n'est PAS une couverture en traitement.</strong> C'est la proportion de cas résistants parmi les cas testés.
+        </div>
+    """, unsafe_allow_html=True)
+    
     col3, col4 = st.columns(2)
     
     with col3:
@@ -1001,7 +961,10 @@ def show_depistage_tab(df_filtered):
         st.plotly_chart(fig_rr, use_container_width=True)
     
     with col4:
-        taux_rr = df_filtered['rrmdr_detection_rate'].mean()
+        total_testes = df_filtered['q4_0_hf_total'].sum()
+        total_diag = df_filtered['q4_1_hf_total'].sum()
+        taux_rr = (total_diag / total_testes * 100) if total_testes > 0 else 0
+        
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=taux_rr,
@@ -1017,54 +980,151 @@ def show_depistage_tab(df_filtered):
                                  'thickness': 0.75, 'value': 90}}))
         fig_gauge.update_layout(height=300)
         st.plotly_chart(fig_gauge, use_container_width=True)
+        
+        st.caption(f"Formule : {total_diag:,} ÷ {total_testes:,} × 100 = **{taux_rr:.1f}%**")
 
 
 def show_traitement_tab(df_filtered):
-    st.subheader("💊 Résultats du traitement")
-    st.info("ℹ️ **Note importante :** Les taux de succès des traitements DS-TB et RR/MDR nécessitent un suivi de cohorte respectivement sur 12 et 24 mois.")
+    st.subheader("💊 Traitement de la tuberculose")
     
-    st.markdown("### Tuberculose sensible (DS-TB)")
+    # ⚠️ AVERTISSEMENT PRINCIPAL
+    st.markdown("""
+    <div class="warning-box">
+        <strong>⚠️ IMPORTANT — Distinction des cohortes</strong><br>
+        Ce tableau de bord <strong>ne dispose pas encore de données 2025</strong> pour évaluer les résultats de fin de traitement.<br><br>
+        Les indicateurs ci-dessous sont donc présentés <strong>en deux blocs séparés</strong> :<br>
+        • <strong>Bloc 1 — Cohortes en cours (2026)</strong> : patients mis en traitement dans la période affichée<br>
+        • <strong>Bloc 2 — Résultats antérieurs</strong> : à renseigner quand les cohortes 2025 seront disponibles<br><br>
+        <em>Ne pas interpréter les "réussites" comme découlant des "débuts" du même mois.</em>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ============================================================
+    # BLOC 1 : COHORTE EN COURS (2026)
+    # ============================================================
+    st.markdown("## 📊 Bloc 1 — Cohorte en cours (2026)")
+    st.markdown("*Patients dépistés et mis en traitement dans la période affichée*")
+    
+    st.markdown("### Tuberculose sensible (DS-TB) — Mise en traitement")
+    
     col1, col2 = st.columns(2)
     
     with col1:
         ds_data = pd.DataFrame({
-            'Statut': ['Traitement débuté', 'Traitement réussi'],
-            'Hommes': [df_filtered['q3_0_h'].sum(), df_filtered['q6_0_h'].sum()],
-            'Femmes': [df_filtered['q3_0_f'].sum(), df_filtered['q6_0_f'].sum()]
+            'Sexe': ['Hommes', 'Femmes'],
+            'Cas détectés': [df_filtered['q2_0_h'].sum(), df_filtered['q2_0_f'].sum()],
+            'Mis en traitement': [df_filtered['q3_0_h'].sum(), df_filtered['q3_0_f'].sum()]
         })
-        ds_melted = ds_data.melt(id_vars=['Statut'], var_name='Sexe', value_name='Nombre')
-        fig_ds = px.bar(ds_melted, x='Statut', y='Nombre', color='Sexe', 
-                        barmode='group', title="Traitement DS-TB par sexe")
+        ds_melted = ds_data.melt(id_vars=['Sexe'], var_name='Étape', value_name='Nombre')
+        fig_ds = px.bar(ds_melted, x='Sexe', y='Nombre', color='Étape', 
+                        barmode='group', title="Cas détectés vs Mis en traitement (DS-TB)")
         st.plotly_chart(fig_ds, use_container_width=True)
     
     with col2:
-        total_debutes = df_filtered['q3_0_hf_total'].sum()
-        total_reussis = df_filtered['q6_0_hf_total'].sum()
-        st.metric("📊 Total traitements DS-TB débutés", f"{int(total_debutes):,}")
-        st.metric("✅ Traitements DS-TB réussis", f"{int(total_reussis):,}")
-        st.caption("💡 Le taux de succès DS-TB se calcule sur une cohorte suivie 12 mois.")
+        total_detectes = df_filtered['q2_0_hf_total'].sum()
+        total_mis_en_traitement = df_filtered['q3_0_hf_total'].sum()
+        taux_mise_traitement = (total_mis_en_traitement / total_detectes * 100) if total_detectes > 0 else 0
+        
+        st.metric("🦠 Cas TB détectés (période)", f"{int(total_detectes):,}")
+        st.metric("💊 Cas mis en traitement DS (période)", f"{int(total_mis_en_traitement):,}")
+        
+        st.markdown(f"""
+        <div class="formula-box">
+        <strong>Taux de mise en traitement DS-TB :</strong><br>
+        {int(total_mis_en_traitement):,} ÷ {int(total_detectes):,} × 100 = <strong>{taux_mise_traitement:.1f}%</strong>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.caption("💡 Ce taux mesure la proportion de cas détectés qui sont effectivement mis sous traitement dans la même période.")
     
-    st.markdown("### Tuberculose résistante (RR/MDR)")
+    st.markdown("### Tuberculose résistante (RR/MDR) — Mise en traitement")
+    
     col3, col4 = st.columns(2)
     
     with col3:
         rr_data_tx = pd.DataFrame({
-            'Statut': ['Traitement débuté', 'Traitement réussi'],
-            'Hommes': [df_filtered['q5_0_h'].sum(), df_filtered['q7_0_h'].sum()],
-            'Femmes': [df_filtered['q5_0_f'].sum(), df_filtered['q7_0_f'].sum()]
+            'Sexe': ['Hommes', 'Femmes'],
+            'Diagnostiqués RR/MDR': [df_filtered['q4_1_h'].sum(), df_filtered['q4_1_f'].sum()],
+            'Mis en traitement': [df_filtered['q5_0_h'].sum(), df_filtered['q5_0_f'].sum()]
         })
-        rr_melted = rr_data_tx.melt(id_vars=['Statut'], var_name='Sexe', value_name='Nombre')
-        fig_rr_tx = px.bar(rr_melted, x='Statut', y='Nombre', color='Sexe', 
-                           barmode='group', title="Traitement RR/MDR par sexe")
+        rr_melted = rr_data_tx.melt(id_vars=['Sexe'], var_name='Étape', value_name='Nombre')
+        fig_rr_tx = px.bar(rr_melted, x='Sexe', y='Nombre', color='Étape', 
+                           barmode='group', title="Diagnostiqués RR/MDR vs Mis en traitement")
         st.plotly_chart(fig_rr_tx, use_container_width=True)
     
     with col4:
-        total_debutes_rr = df_filtered['q5_0_hf_total'].sum()
-        total_reussis_rr = df_filtered['q7_0_hf_total'].sum()
-        st.metric("📊 Total traitements RR/MDR débutés", f"{int(total_debutes_rr):,}")
-        st.metric("✅ Traitements RR/MDR réussis", f"{int(total_reussis_rr):,}")
-        st.caption("💡 Le taux de succès RR/MDR se calcule sur une cohorte suivie 24 mois.")
+        total_diag_rr = df_filtered['q4_1_hf_total'].sum()
+        total_mis_en_traitement_rr = df_filtered['q5_0_hf_total'].sum()
+        taux_mise_traitement_rr = (total_mis_en_traitement_rr / total_diag_rr * 100) if total_diag_rr > 0 else 0
+        
+        st.metric("🧬 Diagnostiqués RR/MDR (période)", f"{int(total_diag_rr):,}")
+        st.metric("💊 Mis en traitement RR/MDR (période)", f"{int(total_mis_en_traitement_rr):,}")
+        
+        st.markdown(f"""
+        <div class="formula-box">
+        <strong>Taux de mise en traitement RR/MDR :</strong><br>
+        {int(total_mis_en_traitement_rr):,} ÷ {int(total_diag_rr):,} × 100 = <strong>{taux_mise_traitement_rr:.1f}%</strong>
+        </div>
+        """, unsafe_allow_html=True)
     
+    # ============================================================
+    # BLOC 2 : RÉSULTATS ANTÉRIEURS (2025)
+    # ============================================================
+    st.markdown("---")
+    st.markdown("## 📊 Bloc 2 — Résultats de traitement (cohortes antérieures)")
+    
+    st.markdown("""
+    <div class="info-box">
+        <strong>ℹ️ Ces indicateurs concernent des patients mis en traitement lors de périodes antérieures (ex. 2025).</strong><br>
+        Ils ne peuvent <strong>PAS</strong> être lius comme découlant des mises en traitement du Bloc 1.<br><br>
+        • Le <strong>taux de succès DS-TB</strong> est évalué après <strong>12 mois</strong> de suivi.<br>
+        • Le <strong>taux de succès RR/MDR</strong> est évalué après <strong>24 mois</strong> de suivi.<br><br>
+        <em>Les données 2025 n'étant pas encore saisies dans la base, les valeurs ci-dessous peuvent être nulles ou partielles.</em>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col5, col6 = st.columns(2)
+    
+    with col5:
+        total_reussis_ds = df_filtered['q6_0_hf_total'].sum()
+        st.metric("✅ Traitements DS-TB réussis (cohorte antérieure)", f"{int(total_reussis_ds):,}",
+                 help="Issus de patients mis en traitement 12 mois auparavant")
+        st.caption("💡 Résultats à interpréter uniquement sur les cohortes concernées.")
+    
+    with col6:
+        total_reussis_rr = df_filtered['q7_0_hf_total'].sum()
+        st.metric("✅ Traitements RR/MDR réussis (cohorte antérieure)", f"{int(total_reussis_rr):,}",
+                 help="Issus de patients mis en traitement 24 mois auparavant")
+        st.caption("💡 Résultats à interpréter uniquement sur les cohortes concernées.")
+    
+    # ============================================================
+    # CONTRÔLES DE COHÉRENCE
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### 🔍 Contrôles de cohérence automatiques")
+    
+    # Contrôle 1 : réussites > mises en traitement du même mois ?
+    if total_reussis_ds > total_mis_en_traitement:
+        st.warning(f"""
+        ⚠️ **Anomalie détectée :** Le nombre de traitements DS-TB réussis ({int(total_reussis_ds):,}) 
+        dépasse le nombre de patients mis en traitement dans la période ({int(total_mis_en_traitement):,}).
+        Cela peut indiquer une erreur de saisie ou un mélange de cohortes.
+        """)
+    else:
+        st.success("✅ Contrôle DS-TB : cohérent avec les cohortes actuelles")
+    
+    if total_reussis_rr > total_mis_en_traitement_rr:
+        st.warning(f"""
+        ⚠️ **Anomalie détectée :** Le nombre de traitements RR/MDR réussis ({int(total_reussis_rr):,}) 
+        dépasse le nombre de patients mis en traitement dans la période ({int(total_mis_en_traitement_rr):,}).
+        """)
+    else:
+        st.success("✅ Contrôle RR/MDR : cohérent avec les cohortes actuelles")
+    
+    # ============================================================
+    # NOUVEAUX CAS PAR ÂGE
+    # ============================================================
+    st.markdown("---")
     st.subheader("📊 Nouveaux cas et rechutes par âge et sexe")
     
     age_categories = ['0-4', '5-14', '15-24', '25-34', '35-44', '45-54', '55-64', '≥65']
@@ -1098,53 +1158,127 @@ def show_traitement_tab(df_filtered):
 def show_prevention_tab(df_filtered):
     st.subheader("🛡️ Traitement Préventif à la Tuberculose (TPT)")
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # ⚠️ AVERTISSEMENT PRINCIPAL
+    st.markdown("""
+    <div class="warning-box">
+        <strong>⚠️ IMPORTANT — Cascade scindée en deux</strong><br>
+        Un patient qui <strong>commence</strong> un TPT ne peut <strong>pas</strong> le <strong>terminer</strong> le même mois 
+        (le TPT dure plusieurs mois selon le schéma : 3HP, 6H, etc.).<br><br>
+        La cascade est donc présentée en <strong>deux blocs séparés</strong> :<br>
+        • <strong>Bloc 1 — Démarrage (2026)</strong> : de l'éligibilité au démarrage du TPT<br>
+        • <strong>Bloc 2 — Achèvement (cohortes antérieures)</strong> : patients ayant terminé leur TPT<br><br>
+        <em>Les données 2025 n'étant pas encore saisies, le Bloc 2 peut être vide ou partiel.</em>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ============================================================
+    # BLOC 1 : CASCADE DE DÉMARRAGE (2026)
+    # ============================================================
+    st.markdown("## 📊 Bloc 1 — Cascade de démarrage du TPT (2026)")
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Dépistés TPT", f"{df_filtered['q8_0_hf_total'].sum():,.0f}")
+        total_depistes = df_filtered['q8_0_hf_total'].sum()
+        st.metric("👥 Dépistés pour TPT", f"{total_depistes:,.0f}",
+                 help="Personnes dépistées pour le TPT (contacts, PVVIH, autres groupes)")
+    
     with col2:
-        st.metric("Éligibles TPT", f"{df_filtered['tpt_eligible_total'].sum():,.0f}")
+        total_eligibles = df_filtered['tpt_eligible_total'].sum()
+        st.metric("✅ Éligibles TPT", f"{total_eligibles:,.0f}",
+                 help="Personnes éligibles au TPT après dépistage")
+    
     with col3:
-        st.metric("Ont commencé", f"{df_filtered['tpt_started_total'].sum():,.0f}")
-    with col4:
-        st.metric("Ont terminé", f"{df_filtered['tpt_completed_total'].sum():,.0f}")
-    with col5:
-        tpt_cov = df_filtered['tpt_coverage'].mean()
-        st.metric("Couverture", f"{tpt_cov:.1f}%")
+        total_commences = df_filtered['tpt_started_total'].sum()
+        st.metric("💊 Ont commencé le TPT", f"{total_commences:,.0f}",
+                 help="Personnes ayant effectivement démarré un schéma TPT")
     
-    st.markdown("### 👶 Focus : Enfants de moins de 5 ans")
+    st.markdown("---")
+    st.markdown("### 📈 Cascade TPT — Démarrage")
     
-    enfants_data = {
-        'Dépistés': df_filtered['enfants_moins_5_depistes'].sum(),
-        'Éligibles': df_filtered['enfants_moins_5_eligibles'].sum(),
-        'TPT commencé': df_filtered['enfants_moins_5_commences'].sum(),
-        'TPT terminé': df_filtered['enfants_moins_5_termines'].sum()
-    }
-    
-    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
-    with col_e1:
-        st.metric("👶 Enfants <5 ans dépistés", f"{enfants_data['Dépistés']:,.0f}")
-    with col_e2:
-        st.metric("✅ Enfants <5 ans éligibles", f"{enfants_data['Éligibles']:,.0f}")
-    with col_e3:
-        st.metric("💊 Enfants <5 ans ont commencé", f"{enfants_data['TPT commencé']:,.0f}")
-    with col_e4:
-        st.metric("🏁 Enfants <5 ans ont terminé", f"{enfants_data['TPT terminé']:,.0f}")
-    
-    enfants_df = pd.DataFrame({
-        'Étape': ['Dépistés', 'Éligibles', 'TPT commencé', 'TPT terminé'],
-        'Nombre': list(enfants_data.values())
+    # Cascade limitée au démarrage
+    cascade_tpt_data = pd.DataFrame({
+        'Étape': ['Dépistés TPT', 'Éligibles TPT', 'TPT commencé'],
+        'Nombre': [total_depistes, total_eligibles, total_commences]
     })
-    fig_enfants = px.bar(enfants_df, x='Étape', y='Nombre', 
-                         title="Cascade TPT pour les enfants de moins de 5 ans",
-                         color='Étape', text='Nombre')
-    fig_enfants.update_traces(textposition='outside')
-    st.plotly_chart(fig_enfants, use_container_width=True)
     
-    st.subheader("📊 TPT par groupe cible")
+    fig_cascade_tpt = px.funnel(cascade_tpt_data, x='Nombre', y='Étape',
+                                 title="Cascade TPT — Dépistage → Éligibilité → Démarrage",
+                                 color_discrete_sequence=['#17becf'])
+    fig_cascade_tpt.update_traces(textposition="inside", textinfo="value+percent previous")
+    st.plotly_chart(fig_cascade_tpt, use_container_width=True)
+    
+    # Formules explicites
+    taux_eligibilite = (total_eligibles / total_depistes * 100) if total_depistes > 0 else 0
+    taux_demarrage = (total_commences / total_eligibles * 100) if total_eligibles > 0 else 0
+    
+    st.markdown(f"""
+    <div class="formula-box">
+    <strong>Taux d'éligibilité :</strong> {int(total_eligibles):,} ÷ {int(total_depistes):,} × 100 = <strong>{taux_eligibilite:.1f}%</strong><br>
+    <strong>Taux de démarrage (parmi éligibles) :</strong> {int(total_commences):,} ÷ {int(total_eligibles):,} × 100 = <strong>{taux_demarrage:.1f}%</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ============================================================
+    # FOCUS ENFANTS < 5 ANS vs ≥ 5 ANS
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### 👶 Focus : Enfants de moins de 5 ans vs 5 ans et plus")
+    
+    enfants_moins_5_depistes = df_filtered['q8_0_age5m'].sum()
+    enfants_plus_5_depistes = df_filtered['q8_0_age5p'].sum()
+    enfants_moins_5_eligibles = df_filtered['q8_4_age5m'].sum()
+    enfants_plus_5_eligibles = df_filtered['q8_4_age5p'].sum()
+    enfants_moins_5_commences = df_filtered['q9_1_age5m'].sum()
+    enfants_plus_5_commences = df_filtered['q9_1_age5p'].sum()
+    
+    col_e1, col_e2 = st.columns(2)
+    
+    with col_e1:
+        st.markdown("#### 👶 Enfants < 5 ans (contacts)")
+        st.metric("Dépistés", f"{enfants_moins_5_depistes:,.0f}")
+        st.metric("Éligibles", f"{enfants_moins_5_eligibles:,.0f}")
+        st.metric("TPT commencé", f"{enfants_moins_5_commences:,.0f}")
+    
+    with col_e2:
+        st.markdown("#### 🧒 Enfants ≥ 5 ans (contacts)")
+        st.metric("Dépistés", f"{enfants_plus_5_depistes:,.0f}")
+        st.metric("Éligibles", f"{enfants_plus_5_eligibles:,.0f}")
+        st.metric("TPT commencé", f"{enfants_plus_5_commences:,.0f}")
+    
+    # Graphique comparatif < 5 ans vs ≥ 5 ans
+    age_compare_data = pd.DataFrame({
+        'Tranche d\'âge': ['< 5 ans', '≥ 5 ans', '< 5 ans', '≥ 5 ans', '< 5 ans', '≥ 5 ans'],
+        'Étape': ['Dépistés', 'Dépistés', 'Éligibles', 'Éligibles', 'TPT commencé', 'TPT commencé'],
+        'Nombre': [
+            enfants_moins_5_depistes, enfants_plus_5_depistes,
+            enfants_moins_5_eligibles, enfants_plus_5_eligibles,
+            enfants_moins_5_commences, enfants_plus_5_commences
+        ]
+    })
+    
+    fig_age_compare = px.bar(age_compare_data, x='Étape', y='Nombre', color='Tranche d\'âge',
+                              barmode='group', title="Comparaison < 5 ans vs ≥ 5 ans (cascade TPT contacts)",
+                              color_discrete_sequence=['#ff7f0e', '#1f77b4'])
+    st.plotly_chart(fig_age_compare, use_container_width=True)
+    
+    # ============================================================
+    # CASCADE PAR GROUPE CIBLE
+    # ============================================================
+    st.markdown("---")
+    st.subheader("📊 Cascade TPT par groupe cible (démarrage seulement)")
+    
+    st.markdown("""
+    <div class="info-box">
+        <strong>Définition des groupes cibles :</strong><br>
+        • <strong>Contacts</strong> : personnes ayant été en contact étroit avec un cas de TB confirmé (incluant enfants < 5 ans et ≥ 5 ans)<br>
+        • <strong>PVVIH</strong> : personnes vivant avec le VIH<br>
+        • <strong>Autres groupes à risque</strong> : personnel soignant, prisonniers, patients sous immunosuppresseurs, diabétiques, etc. selon le guide national.
+    </div>
+    """, unsafe_allow_html=True)
     
     tpt_flow = pd.DataFrame({
-        'Groupe cible': ['Contacts (dont <5 ans)', 'PVVIH', 'Autres groupes'],
+        'Groupe cible': ['Contacts', 'PVVIH', 'Autres groupes'],
         'Dépistés': [
             df_filtered['q8_0_hf_total'].sum(),
             df_filtered['q8_2_hf_total'].sum(),
@@ -1155,46 +1289,76 @@ def show_prevention_tab(df_filtered):
             df_filtered['q8_5_hf_total'].sum(),
             df_filtered['q8_6_hf_total'].sum()
         ],
-        'Ont commencé': [
+        'TPT commencé': [
             df_filtered['q9_1_hf_total'].sum(),
             df_filtered['q9_2_hf_total'].sum(),
             df_filtered['q9_3_hf_total'].sum()
-        ],
-        'Ont terminé': [
-            df_filtered['q10_0_hf_total'].sum(),
-            df_filtered['q10_1_hf_total'].sum(),
-            df_filtered['q10_2_hf_total'].sum()
         ]
     })
     
     tpt_flow_melted = tpt_flow.melt(id_vars=['Groupe cible'], var_name='Étape', value_name='Nombre')
     fig_tpt_flow = px.bar(tpt_flow_melted, x='Groupe cible', y='Nombre', color='Étape',
-                          barmode='group', title="Cascade TPT par groupe cible")
+                          barmode='group', title="Cascade TPT par groupe cible (dépistage → démarrage)")
     st.plotly_chart(fig_tpt_flow, use_container_width=True)
     
-    col_c1, col_c2 = st.columns(2)
+    # ============================================================
+    # BLOC 2 : ACHÈVEMENT (COHORTES ANTÉRIEURES)
+    # ============================================================
+    st.markdown("---")
+    st.markdown("## 📊 Bloc 2 — Achèvement du TPT (cohortes antérieures)")
     
-    with col_c1:
-        fig_tpt_cov = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=df_filtered['tpt_coverage'].mean(),
-            title={'text': "Couverture TPT (%)"},
-            domain={'x': [0, 1], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 100]},
-                   'bar': {'color': "#17becf"}}))
-        fig_tpt_cov.update_layout(height=300)
-        st.plotly_chart(fig_tpt_cov, use_container_width=True)
+    st.markdown("""
+    <div class="info-box">
+        <strong>ℹ️ Ces indicateurs concernent des patients ayant <em>commencé</em> un TPT lors de périodes antérieures.</strong><br>
+        Ils ne peuvent <strong>PAS</strong> être lus comme découlant des démarrages du Bloc 1.<br><br>
+        Le TPT dure plusieurs mois (3HP = 3 mois, 6H = 6 mois, etc.). Un patient qui commence en juillet 2026 
+        ne peut terminer qu'à partir d'octobre 2026 minimum.<br><br>
+        <em>Les données 2025 n'étant pas encore disponibles, ces valeurs peuvent être nulles ou partielles.</em>
+    </div>
+    """, unsafe_allow_html=True)
     
-    with col_c2:
-        fig_tpt_comp = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=df_filtered['tpt_completion_rate'].mean(),
-            title={'text': "Taux d'achèvement TPT (%)"},
-            domain={'x': [0, 1], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 100]},
-                   'bar': {'color': "#2ca02c"}}))
-        fig_tpt_comp.update_layout(height=300)
-        st.plotly_chart(fig_tpt_comp, use_container_width=True)
+    total_termines = df_filtered['tpt_completed_total'].sum()
+    
+    col_t1, col_t2, col_t3 = st.columns(3)
+    
+    with col_t1:
+        st.metric("🏁 TPT terminés (cohorte antérieure)", f"{total_termines:,.0f}",
+                 help="Patients ayant terminé leur TPT (issu des cohortes antérieures)")
+    
+    with col_t2:
+        st.metric("👶 dont enfants < 5 ans", f"{df_filtered['q10_0_age5m'].sum():,.0f}")
+    
+    with col_t3:
+        taux_achevement = (total_termines / total_commences * 100) if total_commences > 0 else 0
+        st.metric("📊 Taux d'achèvement", f"{taux_achevement:.1f}%",
+                 help="⚠️ À interpréter uniquement sur les cohortes concernées")
+    
+    st.markdown(f"""
+    <div class="formula-box">
+    <strong>Formule du taux d'achèvement TPT :</strong><br>
+    TPT terminés ÷ TPT commencés (même cohorte) × 100<br>
+    <em>⚠️ Actuellement calculé sur les données disponibles, à affiner quand les cohortes 2025 seront saisies.</em>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Détail par groupe cible (terminés)
+    if total_termines > 0:
+        st.markdown("### Détail des TPT terminés par groupe cible")
+        
+        tpt_fin = pd.DataFrame({
+            'Groupe cible': ['Contacts', 'PVVIH', 'Autres groupes'],
+            'TPT terminé': [
+                df_filtered['q10_0_hf_total'].sum(),
+                df_filtered['q10_1_hf_total'].sum(),
+                df_filtered['q10_2_hf_total'].sum()
+            ]
+        })
+        
+        fig_tpt_fin = px.bar(tpt_fin, x='Groupe cible', y='TPT terminé',
+                              title="TPT terminés par groupe cible",
+                              color='Groupe cible', text='TPT terminé')
+        fig_tpt_fin.update_traces(textposition='outside')
+        st.plotly_chart(fig_tpt_fin, use_container_width=True)
 
 
 # ============================================================================
@@ -1298,18 +1462,6 @@ def show_medicaments_tab(df_filtered):
         else:
             row['Statut'] = '🟢 Stock OK'
         
-        date_exp = row.get('Date Expiration', '-')
-        if date_exp != '-' and date_exp != 0:
-            try:
-                date_obj = pd.to_datetime(date_exp, format='%d/%m/%Y')
-                jours_restants = (date_obj - pd.Timestamp.now()).days
-                if 0 < jours_restants < 180:
-                    row['Statut'] = '🔵 Expiration proche'
-                elif jours_restants <= 0:
-                    row['Statut'] = '🔴 Expiré'
-            except:
-                pass
-        
         data_stocks.append(row)
     
     df_stocks = pd.DataFrame(data_stocks)
@@ -1323,65 +1475,8 @@ def show_medicaments_tab(df_filtered):
     
     st.dataframe(df_stocks_display, use_container_width=True, height=400)
     
-    col_export1, col_export2 = st.columns(2)
-    with col_export1:
-        st.download_button(
-            label="📥 Télécharger les stocks (CSV)",
-            data=df_stocks_display.to_csv(index=False).encode('utf-8'),
-            file_name=f"stocks_medicaments_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with col_export2:
-        st.download_button(
-            label="📥 Télécharger les stocks (Excel)",
-            data=to_excel(df_stocks_display),
-            file_name=f"stocks_medicaments_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    st.markdown("---")
-    st.subheader("📊 Visualisation des stocks")
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        df_graph = df_stocks[df_stocks['Stock Disponible'] != '-'].copy()
-        if len(df_graph) > 0:
-            df_graph['Stock Disponible'] = pd.to_numeric(df_graph['Stock Disponible'], errors='coerce')
-            df_graph = df_graph[df_graph['Stock Disponible'] > 0]
-            
-            if len(df_graph) > 0:
-                fig_stock = px.bar(
-                    df_graph, x='Médicament', y='Stock Disponible',
-                    title='Stock disponible par médicament',
-                    color='Stock Disponible', color_continuous_scale='Blues',
-                    text='Stock Disponible'
-                )
-                fig_stock.update_traces(textposition='outside')
-                fig_stock.update_layout(xaxis_tickangle=45, height=400)
-                st.plotly_chart(fig_stock, use_container_width=True)
-            else:
-                st.info("Aucun stock disponible à afficher")
-    
-    with col_g2:
-        if 'Nb CDT en rupture' in df_stocks.columns:
-            df_rupture_cdt = df_stocks[df_stocks['Nb CDT en rupture'] > 0].copy()
-            if len(df_rupture_cdt) > 0:
-                fig_rupture_cdt = px.bar(
-                    df_rupture_cdt, x='Médicament', y='Nb CDT en rupture',
-                    title='Nombre de CDT avec rupture de stock',
-                    color='Nb CDT en rupture', color_continuous_scale='Reds',
-                    text='Nb CDT en rupture'
-                )
-                fig_rupture_cdt.update_traces(textposition='outside')
-                fig_rupture_cdt.update_layout(xaxis_tickangle=45, height=400)
-                st.plotly_chart(fig_rupture_cdt, use_container_width=True)
-            else:
-                st.success("✅ Aucun CDT en rupture de stock")
-    
     st.markdown("---")
     st.subheader("📤 Suivi de distribution des médicaments")
-    st.markdown("**Suivi hebdomadaire** de la distribution : National → CDR → Zone de Santé")
     
     if st.session_state.get('auth_saisie_distribution', False):
         if st.button("🚪 Se déconnecter du formulaire", key="logout_distribution"):
@@ -1490,179 +1585,6 @@ def show_medicaments_tab(df_filtered):
             
             st.metric("⚖️ Écart Expédié/Reçu", f"{int(abs(ecart_global)):,}",
                      delta=delta_ecart, delta_color=color_ecart)
-        
-        st.markdown("---")
-        st.markdown("### 📋 Suivi par niveau de distribution")
-        
-        tab_nat, tab_cdr, tab_zs = st.tabs(["🌍 National → CDR", "🏭 CDR → ZS", "🏥 Zones de Santé"])
-        
-        with tab_nat:
-            df_nat = df_dist_display[df_dist_display['type_niveau'] == 'National'].copy()
-            if len(df_nat) > 0:
-                df_nat_grouped = df_nat.groupby(['nom_entite', 'medicament']).agg({
-                    'quantite_prevue': 'sum',
-                    'quantite_expediee': 'sum',
-                    'quantite_recue': 'sum'
-                }).reset_index()
-                
-                df_nat_grouped['Taux expédition (%)'] = np.where(
-                    df_nat_grouped['quantite_prevue'] > 0,
-                    (df_nat_grouped['quantite_expediee'] / df_nat_grouped['quantite_prevue'] * 100).round(1),
-                    0
-                )
-                
-                df_nat_grouped['Statut'] = df_nat_grouped['Taux expédition (%)'].apply(
-                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-                )
-                
-                df_nat_display = df_nat_grouped.rename(columns={
-                    'nom_entite': 'CDR destinataire',
-                    'medicament': 'Médicament',
-                    'quantite_prevue': 'Qté prévue',
-                    'quantite_expediee': 'Qté expédiée',
-                    'quantite_recue': 'Qté reçue'
-                })
-                
-                st.dataframe(df_nat_display, use_container_width=True, height=300)
-            else:
-                st.info("Aucune donnée d'expédition nationale pour le moment.")
-        
-        with tab_cdr:
-            df_cdr = df_dist_display[df_dist_display['type_niveau'] == 'CDR'].copy()
-            if len(df_cdr) > 0:
-                df_cdr_grouped = df_cdr.groupby(['nom_entite', 'medicament']).agg({
-                    'quantite_prevue': 'sum',
-                    'quantite_expediee': 'sum',
-                    'quantite_recue': 'sum'
-                }).reset_index()
-                
-                df_cdr_grouped['Taux réception (%)'] = np.where(
-                    df_cdr_grouped['quantite_expediee'] > 0,
-                    (df_cdr_grouped['quantite_recue'] / df_cdr_grouped['quantite_expediee'] * 100).round(1),
-                    0
-                )
-                
-                df_cdr_grouped['Statut'] = df_cdr_grouped['Taux réception (%)'].apply(
-                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-                )
-                
-                df_cdr_display = df_cdr_grouped.rename(columns={
-                    'nom_entite': 'CDR',
-                    'medicament': 'Médicament',
-                    'quantite_prevue': 'Qté prévue',
-                    'quantite_expediee': 'Qté expédiée',
-                    'quantite_recue': 'Qté reçue'
-                })
-                
-                st.dataframe(df_cdr_display, use_container_width=True, height=300)
-            else:
-                st.info("Aucune donnée de réception/redistribution CDR pour le moment.")
-        
-        with tab_zs:
-            df_zs = df_dist_display[df_dist_display['type_niveau'] == 'Zone de Santé'].copy()
-            if len(df_zs) > 0:
-                df_zs_grouped = df_zs.groupby(['nom_entite', 'medicament']).agg({
-                    'quantite_prevue': 'sum',
-                    'quantite_expediee': 'sum',
-                    'quantite_recue': 'sum'
-                }).reset_index()
-                
-                df_zs_grouped['Taux réception (%)'] = np.where(
-                    df_zs_grouped['quantite_prevue'] > 0,
-                    (df_zs_grouped['quantite_recue'] / df_zs_grouped['quantite_prevue'] * 100).round(1),
-                    0
-                )
-                
-                df_zs_grouped['Statut'] = df_zs_grouped['Taux réception (%)'].apply(
-                    lambda x: '🟢 OK' if x >= 90 else '🟡 Partiel' if x >= 50 else '🔴 Faible'
-                )
-                
-                df_zs_display = df_zs_grouped.rename(columns={
-                    'nom_entite': 'Zone de Santé',
-                    'medicament': 'Médicament',
-                    'quantite_prevue': 'Qté prévue',
-                    'quantite_expediee': 'Qté expédiée',
-                    'quantite_recue': 'Qté reçue'
-                })
-                
-                st.dataframe(df_zs_display, use_container_width=True, height=300)
-            else:
-                st.info("Aucune donnée de réception Zone de Santé pour le moment.")
-        
-        st.markdown("---")
-        col_exp1, col_exp2 = st.columns(2)
-        with col_exp1:
-            st.download_button(
-                label="📥 Télécharger les données de distribution (CSV)",
-                data=df_dist_display.to_csv(index=False).encode('utf-8'),
-                file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        with col_exp2:
-            st.download_button(
-                label="📥 Télécharger les données de distribution (Excel)",
-                data=to_excel(df_dist_display),
-                file_name=f"distribution_medicaments_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        st.markdown("---")
-        st.markdown("### 📊 Visualisation de la distribution")
-        
-        col_g1, col_g2 = st.columns(2)
-        
-        with col_g1:
-            df_med = df_dist_display.groupby('medicament').agg({
-                'quantite_prevue': 'sum',
-                'quantite_expediee': 'sum',
-                'quantite_recue': 'sum'
-            }).reset_index()
-            
-            fig_med = go.Figure()
-            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_prevue'],
-                                      name='Prévu', marker_color='#1f77b4'))
-            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_expediee'],
-                                      name='Expédié', marker_color='#ff7f0e'))
-            fig_med.add_trace(go.Bar(x=df_med['medicament'], y=df_med['quantite_recue'],
-                                      name='Reçu', marker_color='#2ca02c'))
-            fig_med.update_layout(
-                title='Distribution par médicament (tous niveaux)',
-                xaxis_title='Médicament',
-                yaxis_title='Quantité',
-                barmode='group',
-                height=400,
-                xaxis_tickangle=45
-            )
-            st.plotly_chart(fig_med, use_container_width=True)
-        
-        with col_g2:
-            if 'semaine' in df_dist_display.columns:
-                df_time = df_dist_display.groupby('semaine').agg({
-                    'quantite_prevue': 'sum',
-                    'quantite_expediee': 'sum',
-                    'quantite_recue': 'sum'
-                }).reset_index()
-                
-                df_time = df_time.sort_values('semaine')
-                
-                fig_time = go.Figure()
-                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_prevue'],
-                                                mode='lines+markers', name='Prévu',
-                                                line=dict(color='#1f77b4', width=2)))
-                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_expediee'],
-                                                mode='lines+markers', name='Expédié',
-                                                line=dict(color='#ff7f0e', width=2)))
-                fig_time.add_trace(go.Scatter(x=df_time['semaine'], y=df_time['quantite_recue'],
-                                                mode='lines+markers', name='Reçu',
-                                                line=dict(color='#2ca02c', width=2)))
-                fig_time.update_layout(
-                    title='Évolution hebdomadaire de la distribution',
-                    xaxis_title='Semaine',
-                    yaxis_title='Quantité',
-                    height=400,
-                    xaxis_tickangle=45
-                )
-                st.plotly_chart(fig_time, use_container_width=True)
 
 
 # ============================================================================
@@ -1771,37 +1693,6 @@ def show_summary_province(df):
         - 💧 **Vert d'eau** : 80% - 89% (Bon)
         - 🟢 **Vert citron** : ≥ 90% (Excellent)
         """)
-        
-        col_rename_export = {
-            'Province': 'Province', 'ZS_attendues': 'Zones_de_Sante_attendues',
-            'ZS_soumises': 'Zones_de_Sante_soumises', 'Taux_ZS': 'Taux_completude_ZS',
-            'CDT_attendus': 'CDT_attendus', 'CDT_soumis': 'CDT_soumis',
-            'Taux_CDT': 'Taux_completude_CDT', 'Dépistages': 'Depistages',
-            'Cas_présumés': 'Cas_presumes', 'TB_détectée': 'TB_detectee',
-            'Traitement_DS': 'Traitement_DS_debute', 'Test_RR': 'Test_resistance_RR',
-            'Traitement_RR': 'Traitement_RR_debute', 'Dépistés_TPT': 'Depistes_TPT',
-            'TPT_commencé': 'TPT_commence', 'Performance': 'Performance'
-        }
-        df_export = completeness.rename(columns=col_rename_export)
-        
-        col1_export, col2_export = st.columns(2)
-        with col1_export:
-            st.download_button(
-                label="📥 Télécharger (CSV)",
-                data=df_export.to_csv(index=False).encode('utf-8'),
-                file_name=f"completude_provinces_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        with col2_export:
-            st.download_button(
-                label="📥 Télécharger (Excel)",
-                data=to_excel(df_export),
-                file_name=f"completude_provinces_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        st.markdown("---")
-        show_performance_graphs(completeness)
 
 
 def show_detail_zs(df, province):
@@ -1836,47 +1727,6 @@ def show_detail_zs(df, province):
     
     st.markdown("---")
     st.dataframe(detail_zs, use_container_width=True, height=400)
-    
-    detail_zs_export = get_readable_columns(detail_zs)
-    col1_exp, col2_exp = st.columns(2)
-    with col1_exp:
-        st.download_button(
-            label=f"📥 Télécharger (CSV) - {province}",
-            data=detail_zs_export.to_csv(index=False).encode('utf-8'),
-            file_name=f"detail_zs_{province}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with col2_exp:
-        st.download_button(
-            label=f"📥 Télécharger (Excel) - {province}",
-            data=to_excel(detail_zs_export),
-            file_name=f"detail_zs_{province}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    st.markdown("---")
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        fig_depistages = px.bar(
-            detail_zs, x='Zone de Santé', y='Dépistages',
-            title=f"Dépistages par Zone de Santé - {province}",
-            color='Dépistages', color_continuous_scale='Blues', text='Dépistages'
-        )
-        fig_depistages.update_traces(textposition='outside')
-        fig_depistages.update_layout(xaxis_tickangle=45, height=400)
-        st.plotly_chart(fig_depistages, use_container_width=True)
-    
-    with col_g2:
-        fig_tb = px.bar(
-            detail_zs, x='Zone de Santé', y='TB_détectée',
-            title=f"TB détectée par Zone de Santé - {province}",
-            color='TB_détectée', color_continuous_scale='Reds', text='TB_détectée'
-        )
-        fig_tb.update_traces(textposition='outside')
-        fig_tb.update_layout(xaxis_tickangle=45, height=400)
-        st.plotly_chart(fig_tb, use_container_width=True)
 
 
 def show_detail_etablissement(df, zone_sante):
@@ -1910,106 +1760,6 @@ def show_detail_etablissement(df, zone_sante):
     
     st.markdown("---")
     st.dataframe(detail_etab, use_container_width=True, height=400)
-    
-    detail_etab_export = get_readable_columns(detail_etab)
-    col1_exp, col2_exp = st.columns(2)
-    with col1_exp:
-        st.download_button(
-            label=f"📥 Télécharger (CSV) - {zone_sante}",
-            data=detail_etab_export.to_csv(index=False).encode('utf-8'),
-            file_name=f"detail_etab_{zone_sante}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with col2_exp:
-        st.download_button(
-            label=f"📥 Télécharger (Excel) - {zone_sante}",
-            data=to_excel(detail_etab_export),
-            file_name=f"detail_etab_{zone_sante}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    st.markdown("---")
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        fig_depistages = px.bar(
-            detail_etab, x='Établissement', y='Dépistages',
-            title=f"Dépistages par Établissement - {zone_sante}",
-            color='Dépistages', color_continuous_scale='Blues', text='Dépistages'
-        )
-        fig_depistages.update_traces(textposition='outside')
-        fig_depistages.update_layout(xaxis_tickangle=45, height=400)
-        st.plotly_chart(fig_depistages, use_container_width=True)
-    
-    with col_g2:
-        fig_tb = px.bar(
-            detail_etab, x='Établissement', y='TB_détectée',
-            title=f"TB détectée par Établissement - {zone_sante}",
-            color='TB_détectée', color_continuous_scale='Reds', text='TB_détectée'
-        )
-        fig_tb.update_traces(textposition='outside')
-        fig_tb.update_layout(xaxis_tickangle=45, height=400)
-        st.plotly_chart(fig_tb, use_container_width=True)
-
-
-def show_performance_graphs(completeness):
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        fig_zs = go.Figure()
-        fig_zs.add_trace(go.Bar(
-            x=completeness['Province'], y=completeness['Taux_ZS'],
-            text=completeness['Taux_ZS'].apply(lambda x: f"{x:.1f}%"),
-            textposition='outside',
-            marker_color=completeness['Taux_ZS'].apply(
-                lambda x: '#28a745' if x >= 90 else '#17becf' if x >= 80 else '#ffc107' if x >= 50 else '#dc3545'
-            )
-        ))
-        fig_zs.update_layout(
-            title="Taux de complétude des Zones de Santé",
-            xaxis_title="Province", yaxis_title="Taux (%)",
-            height=400, yaxis_range=[0, 120], showlegend=False
-        )
-        fig_zs.add_hline(y=100, line_dash="dash", line_color="green", annotation_text="Cible 100%")
-        fig_zs.add_hline(y=80, line_dash="dash", line_color="orange", annotation_text="Seuil minimal 80%")
-        st.plotly_chart(fig_zs, use_container_width=True)
-    
-    with col_g2:
-        fig_cdt = go.Figure()
-        fig_cdt.add_trace(go.Bar(
-            x=completeness['Province'], y=completeness['Taux_CDT'],
-            text=completeness['Taux_CDT'].apply(lambda x: f"{x:.1f}%"),
-            textposition='outside',
-            marker_color=completeness['Taux_CDT'].apply(
-                lambda x: '#28a745' if x >= 90 else '#17becf' if x >= 80 else '#ffc107' if x >= 50 else '#dc3545'
-            )
-        ))
-        fig_cdt.update_layout(
-            title="Taux de complétude des CDT",
-            xaxis_title="Province", yaxis_title="Taux (%)",
-            height=400, yaxis_range=[0, 120], showlegend=False
-        )
-        fig_cdt.add_hline(y=100, line_dash="dash", line_color="green", annotation_text="Cible 100%")
-        fig_cdt.add_hline(y=80, line_dash="dash", line_color="orange", annotation_text="Seuil minimal 80%")
-        st.plotly_chart(fig_cdt, use_container_width=True)
-    
-    st.markdown("### 📊 Synthèse des performances")
-    
-    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-    
-    with col_m1:
-        moy_zs = completeness['Taux_ZS'].mean()
-        st.metric("📈 Taux ZS moyen", f"{moy_zs:.1f}%")
-    with col_m2:
-        moy_cdt = completeness['Taux_CDT'].mean()
-        st.metric("📈 Taux CDT moyen", f"{moy_cdt:.1f}%")
-    with col_m3:
-        nb_bonnes = len(completeness[completeness['Performance'] == '✅ Bonne'])
-        st.metric("✅ Provinces en bonne performance", f"{nb_bonnes}/{len(completeness)}")
-    with col_m4:
-        nb_faibles = len(completeness[completeness['Performance'] == '🔴 Faible'])
-        st.metric("🔴 Provinces en performance faible", f"{nb_faibles}/{len(completeness)}")
 
 
 # ============================================================================
@@ -2017,8 +1767,6 @@ def show_performance_graphs(completeness):
 # ============================================================================
 
 def show_finances_par_province(df_fin, budget_total):
-    """Affiche le suivi budgétaire par province + niveau National (central)"""
-    
     st.markdown("---")
     st.markdown("### 📊 Suivi budgétaire par province et niveau national")
     
@@ -2028,12 +1776,9 @@ def show_finances_par_province(df_fin, budget_total):
         st.warning("⚠️ Fichier `budget_previsionnel.csv` non trouvé ou vide.")
         return
     
-    # Le budget prévisionnel contient déjà la ligne "National" avec son budget
     df_budget_prov = df_budget[['province_name', 'budget_total_province']].copy()
     df_budget_prov.columns = ['Province', 'Budget_prevu']
     
-    # ========== DÉPENSES RÉELLES PAR ENTITÉ (provinces + National) ==========
-    # Normaliser : "Toutes" et "" → "National" (rétrocompatibilité)
     df_fin_clean = df_fin.copy()
     if 'province_name' in df_fin_clean.columns:
         df_fin_clean['province_name'] = df_fin_clean['province_name'].replace({'Toutes': 'National', '': 'National'})
@@ -2047,14 +1792,12 @@ def show_finances_par_province(df_fin, budget_total):
     else:
         depenses_par_entite = pd.DataFrame(columns=['Province', 'Depenses_reelles'])
     
-    # ========== FUSION BUDGET + DÉPENSES ==========
     df_province = df_budget_prov.merge(
         depenses_par_entite, 
         on='Province', 
         how='left'
     )
     
-    # Ajouter les entités qui ont des dépenses mais pas de budget prévu (cas exceptionnel)
     entites_sans_budget = depenses_par_entite[
         ~depenses_par_entite['Province'].isin(df_budget_prov['Province'])
     ]
@@ -2066,20 +1809,17 @@ def show_finances_par_province(df_fin, budget_total):
     df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
     df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
     
-    # Taux d'absorption
     df_province['Taux_absorption'] = df_province.apply(
         lambda row: round((row['Depenses_reelles'] / row['Budget_prevu'] * 100), 1) 
         if row['Budget_prevu'] > 0 else 0,
         axis=1
     )
     
-    # Trier : National en premier, puis provinces alphabétiques
     df_province['_ordre'] = df_province['Province'].apply(
         lambda x: 0 if 'National' in str(x) else 1
     )
     df_province = df_province.sort_values(['_ordre', 'Province']).drop(columns='_ordre').reset_index(drop=True)
     
-    # Statut
     def statut_entite(taux, depenses):
         if depenses == 0:
             return '⚪ Aucune dépense'
@@ -2097,7 +1837,6 @@ def show_finances_par_province(df_fin, budget_total):
         axis=1
     )
     
-    # ========== AFFICHAGE DU TABLEAU ==========
     df_affichage = df_province[[
         'Province', 'Budget_prevu', 'Depenses_reelles',
         'Reste_a_depenser', 'Taux_absorption', 'Statut'
@@ -2108,7 +1847,6 @@ def show_finances_par_province(df_fin, budget_total):
         'Reste à dépenser ($)', 'Taux absorption (%)', 'Statut'
     ]
     
-    # Remplacer "National" par un libellé plus clair
     df_affichage['Province / Niveau'] = df_affichage['Province / Niveau'].apply(
         lambda x: '🌍 National (central)' if str(x) == 'National' else x
     )
@@ -2118,7 +1856,6 @@ def show_finances_par_province(df_fin, budget_total):
     df_affichage['Reste à dépenser ($)'] = df_affichage['Reste à dépenser ($)'].apply(lambda x: f"${x:,.2f}")
     df_affichage['Taux absorption (%)'] = df_affichage['Taux absorption (%)'].apply(lambda x: f"{x:.1f}%")
     
-    # Ligne TOTAL
     budget_total_reel = df_province['Budget_prevu'].sum()
     depenses_total_reel = df_province['Depenses_reelles'].sum()
     reste_total = budget_total_reel - depenses_total_reel
@@ -2139,15 +1876,12 @@ def show_finances_par_province(df_fin, budget_total):
         entity_str = str(row['Province / Niveau'])
         taux_str = str(row['Taux absorption (%)'])
         
-        # Ligne Nationale : fond bleu clair distinctif
         if 'National' in entity_str:
             return ['background-color: #e7f3ff; color: #004085; font-weight: bold;'] * len(row)
         
-        # Ligne TOTAL : fond gris
         if 'TOTAL' in entity_str:
             return ['background-color: #f0f2f6; color: #000000; font-weight: bold;'] * len(row)
         
-        # Provinces : couleur selon taux
         try:
             taux = float(taux_str.replace('%', ''))
             if taux >= 90:
@@ -2169,18 +1903,14 @@ def show_finances_par_province(df_fin, budget_total):
     
     st.caption("ℹ️ **National (central)** est le budget consommé au niveau central, indépendamment des provinces. Il est intégré dans la ligne TOTAL.")
     
-    # ========== SYNTHÈSE ==========
-    st.markdown("### 📈 Synthèse")
-    
     col1, col2, col3, col4 = st.columns(4)
     
-    # Statistiques séparées : National vs Provinces
     df_national = df_province[df_province['Province'] == 'National']
     df_provinces = df_province[df_province['Province'] != 'National']
     
     with col1:
         budget_nat = df_national['Budget_prevu'].sum() if len(df_national) > 0 else 0
-        st.metric("🌍 Budget National (central)", f"${budget_nat:,.0f}")
+        st.metric("🌍 Budget National", f"${budget_nat:,.0f}")
     with col2:
         dep_nat = df_national['Depenses_reelles'].sum() if len(df_national) > 0 else 0
         taux_nat = (dep_nat / budget_nat * 100) if budget_nat > 0 else 0
@@ -2196,81 +1926,9 @@ def show_finances_par_province(df_fin, budget_total):
         st.metric("💸 Dépenses Provinces", f"${dep_prov:,.0f}",
                  delta=f"{taux_prov:.1f}% absorbé")
     
-    # ========== GRAPHIQUES ==========
-    st.markdown("### 📊 Visualisation")
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        df_graph = df_province[df_province['Budget_prevu'] > 0].copy()
-        
-        if len(df_graph) > 0:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=df_graph['Province'],
-                y=df_graph['Budget_prevu'],
-                name='Budget prévu',
-                marker_color='#1f77b4',
-                text=df_graph['Budget_prevu'].apply(lambda x: f"${x:,.0f}"),
-                textposition='outside'
-            ))
-            fig.add_trace(go.Bar(
-                x=df_graph['Province'],
-                y=df_graph['Depenses_reelles'],
-                name='Dépenses réelles',
-                marker_color='#ff7f0e',
-                text=df_graph['Depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
-                textposition='outside'
-            ))
-            fig.update_layout(
-                title='Budget prévu vs Dépenses réelles',
-                xaxis_title='Province / Niveau',
-                yaxis_title='Montant ($)',
-                barmode='group',
-                height=500,
-                xaxis_tickangle=45,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with col_g2:
-        df_taux = df_province[df_province['Budget_prevu'] > 0].copy()
-        
-        if len(df_taux) > 0:
-            df_taux = df_taux.sort_values('Taux_absorption', ascending=True)
-            
-            fig_taux = go.Figure()
-            fig_taux.add_trace(go.Bar(
-                x=df_taux['Taux_absorption'],
-                y=df_taux['Province'],
-                orientation='h',
-                marker_color=df_taux.apply(
-                    lambda row: '#1f77b4' if row['Province'] == 'National'
-                    else ('#28a745' if row['Taux_absorption'] >= 90 
-                    else '#17becf' if row['Taux_absorption'] >= 80 
-                    else '#ffc107' if row['Taux_absorption'] >= 50 
-                    else '#dc3545'),
-                    axis=1
-                ),
-                text=df_taux['Taux_absorption'].apply(lambda x: f"{x:.1f}%"),
-                textposition='outside'
-            ))
-            fig_taux.update_layout(
-                title="Taux d'absorption (%)",
-                xaxis_title="Taux d'absorption (%)",
-                yaxis_title="",
-                height=500,
-                xaxis_range=[0, 120],
-                showlegend=False
-            )
-            fig_taux.add_vline(x=80, line_dash="dash", line_color="green", 
-                              annotation_text="Cible 80%")
-            st.plotly_chart(fig_taux, use_container_width=True)
-    
     # ========== SUIVI MENSUEL PAR ENTITÉ ==========
     st.markdown("---")
     st.markdown("### 📅 Suivi budgétaire mensuel par entité")
-    st.markdown("Comparaison du **budget prévu mensuel** vs **dépenses réelles** mois par mois")
     
     entites_disponibles = sorted(df_province['Province'].dropna().unique().tolist())
     entite_selectionnee = st.selectbox(
@@ -2323,83 +1981,6 @@ def show_finances_par_province(df_fin, budget_total):
         df_suivi_display['Taux (%)'] = df_suivi_display['Taux (%)'].apply(lambda x: f"{x:.1f}%")
         
         st.dataframe(df_suivi_display, use_container_width=True, height=400)
-        
-        col_gm1, col_gm2 = st.columns(2)
-        
-        libelle_entite = '🌍 National (central)' if entite_selectionnee == 'National' else entite_selectionnee
-        
-        with col_gm1:
-            fig_mois = go.Figure()
-            fig_mois.add_trace(go.Bar(
-                x=df_suivi_mois['mois_str'],
-                y=df_suivi_mois['montant_prevu'],
-                name='Budget prévu',
-                marker_color='#1f77b4',
-                text=df_suivi_mois['montant_prevu'].apply(lambda x: f"${x:,.0f}"),
-                textposition='outside'
-            ))
-            fig_mois.add_trace(go.Bar(
-                x=df_suivi_mois['mois_str'],
-                y=df_suivi_mois['depenses_reelles'],
-                name='Dépenses réelles',
-                marker_color='#ff7f0e',
-                text=df_suivi_mois['depenses_reelles'].apply(lambda x: f"${x:,.0f}"),
-                textposition='outside'
-            ))
-            fig_mois.update_layout(
-                title=f'Budget prévu vs Dépenses - {libelle_entite}',
-                xaxis_title='Mois',
-                yaxis_title='Montant ($)',
-                barmode='group',
-                height=400,
-                xaxis_tickangle=45
-            )
-            st.plotly_chart(fig_mois, use_container_width=True)
-        
-        with col_gm2:
-            fig_taux_mois = go.Figure()
-            fig_taux_mois.add_trace(go.Bar(
-                x=df_suivi_mois['mois_str'],
-                y=df_suivi_mois['taux'],
-                marker_color=df_suivi_mois['taux'].apply(
-                    lambda x: '#28a745' if x >= 90 
-                    else '#17becf' if x >= 80 
-                    else '#ffc107' if x >= 50 
-                    else '#dc3545'
-                ),
-                text=df_suivi_mois['taux'].apply(lambda x: f"{x:.0f}%"),
-                textposition='outside'
-            ))
-            fig_taux_mois.update_layout(
-                title=f"Taux d'absorption mensuel - {libelle_entite}",
-                xaxis_title='Mois',
-                yaxis_title='Taux (%)',
-                height=400,
-                xaxis_tickangle=45,
-                yaxis_range=[0, 120],
-                showlegend=False
-            )
-            fig_taux_mois.add_hline(y=100, line_dash="dash", line_color="green", 
-                                    annotation_text="Cible 100%")
-            st.plotly_chart(fig_taux_mois, use_container_width=True)
-    
-    # ========== EXPORT ==========
-    st.markdown("---")
-    col_export1, col_export2 = st.columns(2)
-    with col_export1:
-        st.download_button(
-            label="📥 Télécharger le suivi (CSV)",
-            data=df_affichage_final.to_csv(index=False).encode('utf-8'),
-            file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with col_export2:
-        st.download_button(
-            label="📥 Télécharger le suivi (Excel)",
-            data=to_excel(df_affichage_final),
-            file_name=f"budget_par_province_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
 
 
 # ============================================================================
@@ -2407,14 +1988,12 @@ def show_finances_par_province(df_fin, budget_total):
 # ============================================================================
 
 def get_mois_projet():
-    """Retourne les mois du projet complet (10 mois) — pour le budget total"""
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
     return pd.date_range(start=date_debut, end=date_fin, freq='MS')
 
 
 def get_mois_projet_affichage():
-    """Retourne les mois à afficher dans le tableau de suivi (6 mois)"""
     date_debut = pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_fin'])
     return pd.date_range(start=date_debut, end=date_fin, freq='MS')
@@ -2445,8 +2024,6 @@ def get_semaines_du_mois(mois):
 
 
 def show_finances_tab(df_main):
-    """Onglet Finances - Protégé par mot de passe + Google Sheets"""
-    
     if not st.session_state.get('auth_consultation_finances', False):
         st.markdown("""
             <div style="background-color: #f8d7da; padding: 2rem; border-radius: 10px; border-left: 5px solid #dc3545; margin-bottom: 1rem; text-align: center;">
@@ -2489,7 +2066,6 @@ def show_finances_tab(df_main):
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
     
-    # ========== LECTURE DYNAMIQUE DU BUDGET ==========
     budget_total = get_budget_total()
     
     if budget_total == 0:
@@ -2498,23 +2074,18 @@ def show_finances_tab(df_main):
     
     df_budget, _ = load_budget_previsionnel()
     
-    # Mois du projet complet (10 mois) — pour le budget total
     mois_projet_complet = get_mois_projet()
-    nb_mois_total = len(mois_projet_complet)   # = 10
+    nb_mois_total = len(mois_projet_complet)
     
-    # Mois à afficher dans le tableau (6 mois)
     mois_projet = get_mois_projet_affichage()
-    nb_mois_affichage = len(mois_projet)        # = 6
+    nb_mois_affichage = len(mois_projet)
     
-    # Prévision mensuelle moyenne = Budget total / 6 (consommation sur 6 mois)
     prevision_mensuelle_moyenne = budget_total / NB_MOIS_CONSOMMATION if NB_MOIS_CONSOMMATION > 0 else 0
     
-    # Prévision hebdomadaire = Budget total / (6 mois × 4 semaines = 24 semaines)
-    nb_semaines_consommation = NB_MOIS_CONSOMMATION * 4   # = 24
+    nb_semaines_consommation = NB_MOIS_CONSOMMATION * 4
     prevision_hebdo = budget_total / nb_semaines_consommation if nb_semaines_consommation > 0 else 0
     
     aujourdhui = pd.Timestamp.now()
-    # Mois écoulés calculés sur la période d'affichage (6 mois)
     mois_ecoules = [m for m in mois_projet if m <= aujourdhui]
     nb_mois_ecoules = len(mois_ecoules)
     
@@ -2534,33 +2105,24 @@ def show_finances_tab(df_main):
                 <td><strong>Période d'affichage :</strong></td>
                 <td>{pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_debut']).strftime('%B %Y')} → {pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_fin']).strftime('%B %Y')} ({nb_mois_affichage} mois)</td>
             </tr>
-            <tr>
-                <td><strong>Prévision mensuelle moyenne :</strong></td>
-                <td colspan="3"><strong>{prevision_mensuelle_moyenne:,.2f} USD / mois</strong> (Budget total ÷ {NB_MOIS_CONSOMMATION} mois)</td>
-            </tr>
         </table>
     </div>
     """, unsafe_allow_html=True)
     
     df_fin = load_finances_data()
     
-    # ⚠️ CRITIQUE : forcer les types pour éviter les erreurs d'assignation (LossySetitemError)
     if len(df_fin) > 0:
-        # Colonnes numériques
         for col in ['depenses', 'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente']:
             if col in df_fin.columns:
                 df_fin[col] = pd.to_numeric(df_fin[col], errors='coerce').fillna(0)
         
-        # Colonnes texte : s'assurer qu'elles sont bien en object/str
         for col in ['type_suivi', 'province_name', 'observations']:
             if col in df_fin.columns:
                 df_fin[col] = df_fin[col].astype('object')
                 df_fin[col] = df_fin[col].where(df_fin[col].notna(), '')
                 df_fin[col] = df_fin[col].astype(str)
-                # Remplacer les 'nan' textuels
                 df_fin[col] = df_fin[col].replace('nan', '')
         
-        # Dates
         if 'date_saisie' in df_fin.columns:
             df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
     
@@ -2639,7 +2201,7 @@ def show_finances_tab(df_main):
                 province = st.selectbox(
                     "🌍 Province / Niveau",
                     options=['National'] + sorted(df_main['province_name'].dropna().unique().tolist()),
-                    help="Sélectionnez 'National' pour les dépenses réalisées au niveau central (non affectées à une province)"
+                    help="Sélectionnez 'National' pour les dépenses réalisées au niveau central"
                 )
             
             with col2:
@@ -2651,7 +2213,6 @@ def show_finances_tab(df_main):
             submitted = st.form_submit_button("✅ Enregistrer l'entrée", use_container_width=True)
             
             if submitted:
-                # ⚠️ CORRECTION : inclure la province ET le type dans le masque pour ne pas écraser une autre entité
                 if type_enregistrement == 'mensuel':
                     if len(df_fin) > 0 and 'province_name' in df_fin.columns:
                         masque = (
@@ -2685,7 +2246,6 @@ def show_finances_tab(df_main):
                     'observations': observations
                 }
                 
-                # ⚠️ CORRECTION : supprimer l'ancienne ligne + recréer, au lieu de modifier (évite les erreurs de typage)
                 if masque.any():
                     idx_a_supprimer = df_fin[masque].index.tolist()
                     df_fin = df_fin.drop(idx_a_supprimer).reset_index(drop=True)
@@ -2695,7 +2255,6 @@ def show_finances_tab(df_main):
                     df_fin = pd.concat([df_fin, pd.DataFrame([nouvelle_entree])], ignore_index=True)
                     st.success(f"✅ Nouvelle entrée {type_enregistrement} ajoutée pour {province} !")
                 
-                # Recalculer les colonnes dérivées
                 df_fin['date_saisie'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce')
                 df_fin['mois_num'] = df_fin['date_saisie'].dt.month
                 df_fin['annee'] = df_fin['date_saisie'].dt.year
@@ -2711,18 +2270,10 @@ def show_finances_tab(df_main):
         show_finances_par_province(df_fin, budget_total)
         return
     
-    df_fin_mensuel = df_fin[df_fin.get('type_suivi', 'mensuel') == 'mensuel'].copy() if 'type_suivi' in df_fin.columns else df_fin.copy()
-    df_fin_hebdo = df_fin[df_fin.get('type_suivi', 'mensuel') == 'hebdomadaire'].copy() if 'type_suivi' in df_fin.columns else pd.DataFrame()
-    
-    if 'depenses' not in df_fin.columns:
-        df_fin['depenses'] = 0
-    
     df_fin['mois_annee'] = pd.to_datetime(df_fin['date_saisie'], errors='coerce').dt.strftime('%Y-%m')
     
-    # ========== DÉPENSES TOTALES (MENSUEL + HEBDO) ==========
     depenses_totales = df_fin['depenses'].sum()
     
-    # Agrégation par mois (mensuel + hebdo)
     depenses_par_mois_toutes = df_fin.groupby('mois_annee').agg({
         'depenses': 'sum'
     }).reset_index()
@@ -2730,7 +2281,6 @@ def show_finances_tab(df_main):
     
     budget_restant = budget_total - depenses_totales
     taux_absorption_global = (depenses_totales / budget_total * 100) if budget_total > 0 else 0
-    # Avancement temporel basé sur la période d'affichage (6 mois)
     taux_temporel = (nb_mois_ecoules / nb_mois_affichage * 100) if nb_mois_affichage > 0 else 0
     ecart = taux_absorption_global - taux_temporel
     
@@ -2739,19 +2289,13 @@ def show_finances_tab(df_main):
     dp_attente_total = df_fin['nombre_dp_en_attente'].sum() if 'nombre_dp_en_attente' in df_fin.columns else 0
     taux_traitement_dp = (dp_traite_total / dp_recu_total * 100) if dp_recu_total > 0 else 0
     
-    # Prévision à date = somme des prévisions des mois écoulés (sur les 6 mois affichés)
-    prevision_a_date = 0
-    for mois in mois_ecoules:
-        prevision_a_date += get_prevision_mois(mois.strftime('%Y-%m'))
-    
     st.markdown("---")
     st.markdown("### 📊 Indicateurs financiers globaux")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("💰 Budget total projet", f"${budget_total:,.0f}",
-                 help="Provinces + National (10 mois)")
+        st.metric("💰 Budget total projet", f"${budget_total:,.0f}")
     with col2:
         st.metric("💸 Dépenses cumulées", f"${depenses_totales:,.2f}",
                  delta=f"{(depenses_totales/budget_total*100):.1f}% du budget" if budget_total > 0 else None)
@@ -2794,248 +2338,12 @@ def show_finances_tab(df_main):
         st.metric("📊 Écart absorption/temps", f"{ecart:+.1f} pts",
                  delta=delta_ecart, delta_color=color_ecart)
     with col7:
-        st.metric("🎯 Prévision à date (6 mois)", f"${prevision_a_date:,.2f}")
-    with col8:
-        ecart_montant = depenses_totales - prevision_a_date
-        if ecart_montant >= 0:
-            delta_montant = f"+${abs(ecart_montant):,.0f}"
-            color_montant = "normal"
-        else:
-            delta_montant = f"-${abs(ecart_montant):,.0f}"
-            color_montant = "inverse"
-        
-        st.metric("💹 Écart budgétaire", f"${depenses_totales:,.0f}",
-                 delta=delta_montant, delta_color=color_montant)
-    
-    st.markdown("### 📋 Indicateurs DP (Demandes de Paiement)")
-    
-    col_dp1, col_dp2, col_dp3, col_dp4 = st.columns(4)
-    
-    with col_dp1:
         st.metric("📥 DP reçus", f"{int(dp_recu_total):,}")
-    with col_dp2:
-        st.metric("✅ DP traités", f"{int(dp_traite_total):,}", 
+    with col8:
+        st.metric("✅ DP traités", f"{int(dp_traite_total):,}",
                  delta=f"{taux_traitement_dp:.1f}%" if dp_recu_total > 0 else None)
-    with col_dp3:
-        st.metric("⏳ DP en attente", f"{int(dp_attente_total):,}")
-    with col_dp4:
-        if dp_attente_total == 0 and dp_recu_total > 0:
-            delta_dp = "🟢 Aucun en attente"
-            color_dp = "normal"
-        elif dp_attente_total <= 5:
-            delta_dp = "🟡 À surveiller"
-            color_dp = "normal"
-        else:
-            delta_dp = "🔴 Retard important"
-            color_dp = "inverse"
-        
-        st.metric("📊 Taux traitement DP", f"{taux_traitement_dp:.1f}%",
-                 delta=delta_dp, delta_color=color_dp)
     
-    # ========== SUIVI PAR PROVINCE + NATIONAL ==========
     show_finances_par_province(df_fin, budget_total)
-    
-    st.markdown("---")
-    
-    def colorer_statut(val):
-        if '🟢' in str(val):
-            return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-        elif '🟡' in str(val):
-            return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-        elif '🟠' in str(val):
-            return 'background-color: #ffe5b4; color: #8a4b08; font-weight: bold;'
-        elif '🔴' in str(val):
-            return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-        elif '⏳' in str(val):
-            return 'background-color: #e7f3ff; color: #004085; font-weight: bold;'
-        else:
-            return ''
-    
-    if 'Mensuel' in type_suivi:
-        st.markdown("### 📅 Suivi mensuel du budget (6 mois affichés)")
-        st.info("ℹ️ **Note** : Le suivi mensuel agrège automatiquement les saisies **mensuelles ET hebdomadaires**. La prévision mensuelle moyenne est calculée sur **6 mois** (budget total ÷ 6).")
-        
-        data_mensuel = []
-        for mois in mois_projet:
-            mois_str = mois.strftime('%B %Y')
-            mois_annee_str = mois.strftime('%Y-%m')
-            
-            # Prévision du mois = somme des budgets de toutes les entités pour ce mois
-            prevision_ce_mois = get_prevision_mois(mois_annee_str)
-            
-            # Dépenses du mois = SOMME mensuel + hebdo
-            ligne = depenses_par_mois_toutes[depenses_par_mois_toutes['mois_annee'] == mois_annee_str]
-            depenses_mois = ligne['total_depenses'].sum() if len(ligne) > 0 else 0
-            
-            mois_est_passe = mois <= aujourdhui
-            if mois_est_passe and depenses_mois == 0:
-                statut = "🔴 Aucune dépense"
-            elif mois_est_passe and depenses_mois < prevision_ce_mois * 0.7:
-                statut = "🟡 Sous-consommation"
-            elif mois_est_passe and depenses_mois > prevision_ce_mois * 1.2:
-                statut = "🟠 Sur-consommation"
-            elif mois_est_passe:
-                statut = "🟢 OK"
-            else:
-                statut = "⏳ À venir"
-            
-            taux_mois = round((depenses_mois / prevision_ce_mois * 100), 1) if prevision_ce_mois > 0 else 0
-            
-            data_mensuel.append({
-                'Mois': mois_str,
-                'Prévision mensuelle ($)': prevision_ce_mois,
-                'Dépenses réelles ($)': depenses_mois,
-                'Écart ($)': depenses_mois - prevision_ce_mois,
-                'Taux (%)': taux_mois,
-                'Statut': statut
-            })
-        
-        df_mensuel = pd.DataFrame(data_mensuel)
-        
-        # Ligne TOTAL (sur les 6 mois affichés)
-        total_prevision = df_mensuel['Prévision mensuelle ($)'].sum()
-        total_depenses = df_mensuel['Dépenses réelles ($)'].sum()
-        total_ecart = total_depenses - total_prevision
-        total_taux = round((total_depenses / total_prevision * 100), 1) if total_prevision > 0 else 0
-        
-        total_row = pd.DataFrame([{
-            'Mois': '**TOTAL (6 mois affichés)**',
-            'Prévision mensuelle ($)': total_prevision,
-            'Dépenses réelles ($)': total_depenses,
-            'Écart ($)': total_ecart,
-            'Taux (%)': total_taux,
-            'Statut': '📊 Bilan'
-        }])
-        
-        # Ligne d'information sur le budget total du projet
-        info_row = pd.DataFrame([{
-            'Mois': '💰 Budget total projet (provinces + National)',
-            'Prévision mensuelle ($)': budget_total,
-            'Dépenses réelles ($)': depenses_totales,
-            'Écart ($)': budget_total - depenses_totales,
-            'Taux (%)': round((depenses_totales / budget_total * 100), 1) if budget_total > 0 else 0,
-            'Statut': 'ℹ️ Référence'
-        }])
-        
-        df_mensuel_final = pd.concat([df_mensuel, total_row, info_row], ignore_index=True)
-        
-        df_mensuel_display = df_mensuel_final.copy()
-        for col in ['Prévision mensuelle ($)', 'Dépenses réelles ($)', 'Écart ($)']:
-            df_mensuel_display[col] = df_mensuel_display[col].apply(
-                lambda x: f"${x:,.2f}" if isinstance(x, (int, float, np.integer, np.floating)) else x
-            )
-        df_mensuel_display['Taux (%)'] = df_mensuel_display['Taux (%)'].apply(
-            lambda x: f"{x:.1f}%" if isinstance(x, (int, float, np.integer, np.floating)) else x
-        )
-        
-        styled_mensuel = df_mensuel_display.style.map(colorer_statut, subset=['Statut'])
-        st.dataframe(styled_mensuel, use_container_width=True, height=450)
-        
-        col1_export, col2_export = st.columns(2)
-        with col1_export:
-            st.download_button(
-                label="📥 Télécharger le suivi mensuel (CSV)",
-                data=df_mensuel_final.to_csv(index=False).encode('utf-8'),
-                file_name=f"suivi_mensuel_budget_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        with col2_export:
-            st.download_button(
-                label="📥 Télécharger le suivi mensuel (Excel)",
-                data=to_excel(df_mensuel_final),
-                file_name=f"suivi_mensuel_budget_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    
-    else:
-        st.markdown("### 📆 Suivi hebdomadaire du budget (6 mois affichés)")
-        
-        if len(df_fin_hebdo) == 0:
-            st.info("📋 Aucune saisie hebdomadaire pour le moment.")
-        else:
-            data_hebdo = []
-            for mois in mois_projet:
-                mois_str = mois.strftime('%B %Y')
-                semaines = get_semaines_du_mois(mois)
-                
-                for semaine in semaines:
-                    semaine_target = semaine['fin'].isocalendar()[1]
-                    annee_target = semaine['fin'].isocalendar()[0]
-                    
-                    masque = (
-                        (df_fin_hebdo['date_saisie'].dt.isocalendar().week == semaine_target) &
-                        (df_fin_hebdo['date_saisie'].dt.isocalendar().year == annee_target)
-                    )
-                    
-                    ligne = df_fin_hebdo[masque]
-                    depenses_semaine = ligne['depenses'].sum() if len(ligne) > 0 else 0
-                    
-                    semaine_est_passee = semaine['fin'] <= aujourdhui
-                    if semaine_est_passee and depenses_semaine == 0:
-                        statut = "🔴 Aucune dépense"
-                    elif semaine_est_passee and depenses_semaine < prevision_hebdo * 0.7:
-                        statut = "🟡 Sous-consommation"
-                    elif semaine_est_passee and depenses_semaine > prevision_hebdo * 1.2:
-                        statut = "🟠 Sur-consommation"
-                    elif semaine_est_passee:
-                        statut = "🟢 OK"
-                    else:
-                        statut = "⏳ À venir"
-                    
-                    data_hebdo.append({
-                        'Mois': mois_str,
-                        'Semaine': semaine['label'],
-                        'Prévision hebdo ($)': prevision_hebdo,
-                        'Dépenses réelles ($)': depenses_semaine,
-                        'Écart ($)': depenses_semaine - prevision_hebdo,
-                        'Statut': statut
-                    })
-            
-            df_hebdo = pd.DataFrame(data_hebdo)
-            
-            df_hebdo_display = df_hebdo.copy()
-            for col in ['Prévision hebdo ($)', 'Dépenses réelles ($)', 'Écart ($)']:
-                df_hebdo_display[col] = df_hebdo_display[col].apply(lambda x: f"${x:,.2f}")
-            
-            styled_hebdo = df_hebdo_display.style.map(colorer_statut, subset=['Statut'])
-            st.dataframe(styled_hebdo, use_container_width=True, height=500)
-            
-            col1_export, col2_export = st.columns(2)
-            with col1_export:
-                st.download_button(
-                    label="📥 Télécharger le suivi hebdomadaire (CSV)",
-                    data=df_hebdo.to_csv(index=False).encode('utf-8'),
-                    file_name=f"suivi_hebdomadaire_budget_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-            with col2_export:
-                st.download_button(
-                    label="📥 Télécharger le suivi hebdomadaire (Excel)",
-                    data=to_excel(df_hebdo),
-                    file_name=f"suivi_hebdomadaire_budget_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-    
-    st.markdown("---")
-    with st.expander("📜 **Voir l'historique des saisies**", expanded=False):
-        cols_fin = ['type_suivi', 'date_saisie', 'province_name', 'depenses',
-                    'nombre_dp_recu', 'nombre_dp_traite', 'nombre_dp_en_attente',
-                    'observations']
-        
-        cols_fin = [c for c in cols_fin if c in df_fin.columns]
-        df_hist = df_fin[cols_fin].copy()
-        df_hist['date_saisie'] = pd.to_datetime(df_hist['date_saisie']).dt.strftime('%d/%m/%Y')
-        
-        rename_dict = {
-            'type_suivi': 'Type', 'date_saisie': 'Date', 'province_name': 'Province / Niveau',
-            'depenses': 'Dépenses ($)', 'nombre_dp_recu': 'DP reçus',
-            'nombre_dp_traite': 'DP traités', 'nombre_dp_en_attente': 'DP en attente',
-            'observations': 'Observations'
-        }
-        df_hist = df_hist.rename(columns=rename_dict)
-        df_hist['Dépenses ($)'] = df_hist['Dépenses ($)'].apply(lambda x: f"${x:,.2f}")
-        
-        st.dataframe(df_hist, use_container_width=True, height=300)
 
 
 def show_donnees_brutes_tab(df_filtered):
@@ -3076,13 +2384,6 @@ def show_donnees_brutes_tab(df_filtered):
             file_name=f"stop_tb_original_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv", use_container_width=True
         )
-    
-    with st.expander("📖 Voir la correspondance des noms de colonnes"):
-        col_mapping = pd.DataFrame({
-            'Code original': list(COLUMN_RENAME_MAP.keys()),
-            'Nom lisible': list(COLUMN_RENAME_MAP.values())
-        })
-        st.dataframe(col_mapping, use_container_width=True, height=400)
 
 
 # ============================================================================
@@ -3190,14 +2491,6 @@ def main():
         )
         
         st.sidebar.info(f"📊 **{len(df_filtered)}** établissements affichés")
-        if niveau == 'Provincial' and province_selectionne and province_selectionne != 'Toutes':
-            st.sidebar.success(f"📍 Province : {province_selectionne}")
-        elif niveau == 'Zone Sante' and zone_sante_selectionne and zone_sante_selectionne != 'Toutes':
-            st.sidebar.success(f"🏥 Zone de Santé : {zone_sante_selectionne}")
-        elif niveau == 'Etablissement' and facility_selectionne and facility_selectionne != 'Tous':
-            st.sidebar.success(f"🏥 Établissement : {facility_selectionne}")
-        elif niveau == 'National' or (niveau == 'Provincial' and province_selectionne == 'Toutes'):
-            st.sidebar.success("🌍 Vue Nationale")
         
         show_kpi_cards(df_filtered, niveau, df_previous, type_periode)
         
