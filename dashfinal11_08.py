@@ -72,9 +72,20 @@ st.markdown('<div class="main-header"><h1>🩺 Stop TB - Tableau de Bord FCSDS</
 
 PROJET_CONFIG = {
     'date_debut': '2026-06-01',
-    'date_fin': '2027-03-31',
+    'date_fin': '2027-03-31',   # Budget total sur 10 mois
     'nom_projet': 'Stop TB - FCSDS'
 }
+
+# Période d'affichage du suivi budgétaire (6 mois)
+# Le budget total reste calculé sur 10 mois (juin 2026 → mars 2027),
+# mais le tableau de suivi n'affiche que les 6 premiers mois (juin → novembre 2026).
+PROJET_CONFIG_AFFICHAGE = {
+    'date_debut': '2026-06-01',
+    'date_fin': '2026-11-30'
+}
+
+# Nombre de mois sur lesquels le budget est consommé (pour calcul des prévisions moyennes)
+NB_MOIS_CONSOMMATION = 6
 
 # ============================================================================
 # CONFIGURATION DES MOTS DE PASSE
@@ -360,7 +371,6 @@ def convertir_mois_fr_en_standard(mois_str):
         parts = mois_str_clean.split('-')
         if len(parts) == 2:
             nom_mois, annee_court = parts
-            # Chercher le numéro du mois (match sur les 4 premières lettres)
             num_mois = None
             for key, val in mois_map_fr.items():
                 if nom_mois.startswith(key[:4]):
@@ -368,7 +378,6 @@ def convertir_mois_fr_en_standard(mois_str):
                     break
             if num_mois is None:
                 return None
-            # Année : '26' → '2026'
             annee = '20' + annee_court if len(annee_court) == 2 else annee_court
             return f"{annee}-{num_mois}"
     except:
@@ -406,7 +415,6 @@ def load_budget_previsionnel():
         colonnes_mois = [c for c in df_budget.columns if c != 'province_name']
         df_budget['budget_total_province'] = df_budget[colonnes_mois].sum(axis=1)
         
-        # Format long
         df_budget_long = df_budget.melt(
             id_vars=['province_name'],
             value_vars=colonnes_mois,
@@ -426,7 +434,7 @@ def load_budget_previsionnel():
 
 
 def get_budget_total():
-    """Récupère le budget total du projet depuis le CSV"""
+    """Récupère le budget total du projet (somme des 10 mois) depuis le CSV"""
     df_budget, _ = load_budget_previsionnel()
     if len(df_budget) == 0:
         return 0
@@ -439,7 +447,6 @@ def get_prevision_mois(mois_str):
     if len(df_budget) == 0:
         return 0
     
-    # Trouver la colonne correspondant à ce mois
     mois_map_fr = {
         '01': 'janv', '02': 'févr', '03': 'mars', '04': 'avr',
         '05': 'mai', '06': 'juin', '07': 'juil', '08': 'août',
@@ -751,7 +758,7 @@ def load_finances_data():
         df_fin['depenses'] = pd.to_numeric(df_fin['depenses'], errors='coerce').fillna(0)
         
         if 'province_name' not in df_fin.columns:
-            df_fin['province_name'] = 'Toutes'
+            df_fin['province_name'] = 'National'
         
         if 'observations' not in df_fin.columns:
             df_fin['observations'] = ''
@@ -2014,7 +2021,7 @@ def show_finances_par_province(df_fin, budget_total):
     """Affiche le suivi budgétaire par province basé sur le budget prévisionnel réel"""
     
     st.markdown("---")
-    st.markdown("### 📊 Suivi budgétaire par province")
+    st.markdown("### 📊 Suivi budgétaire par province (hors dépenses nationales)")
     
     df_budget, df_budget_long = load_budget_previsionnel()
     
@@ -2025,9 +2032,9 @@ def show_finances_par_province(df_fin, budget_total):
     df_budget_prov = df_budget[['province_name', 'budget_total_province']].copy()
     df_budget_prov.columns = ['Province', 'Budget_prevu']
     
-    df_fin_province = df_fin[df_fin['province_name'] != 'Toutes'].copy()
+    # Exclure le niveau National (dépenses centrales) du suivi par province
+    df_fin_province = df_fin[~df_fin['province_name'].isin(['Toutes', 'National', ''])].copy()
     df_fin_province = df_fin_province[df_fin_province['province_name'].notna()]
-    df_fin_province = df_fin_province[df_fin_province['province_name'] != '']
     
     if 'depenses' in df_fin_province.columns and len(df_fin_province) > 0:
         depenses_par_province = df_fin_province.groupby('province_name').agg({
@@ -2046,7 +2053,6 @@ def show_finances_par_province(df_fin, budget_total):
     df_province['Depenses_reelles'] = df_province['Depenses_reelles'].fillna(0)
     df_province['Reste_a_depenser'] = df_province['Budget_prevu'] - df_province['Depenses_reelles']
     
-    # ⚠️ Protection division par zéro
     df_province['Taux_absorption'] = df_province.apply(
         lambda row: round((row['Depenses_reelles'] / row['Budget_prevu'] * 100), 1) 
         if row['Budget_prevu'] > 0 else 0,
@@ -2125,10 +2131,10 @@ def show_finances_par_province(df_fin, budget_total):
     
     if depenses_non_affectees > 0:
         st.info(f"""
-        ℹ️ **Dépenses non affectées à une province** : ${depenses_non_affectees:,.2f}
+        ℹ️ **Dépenses au niveau National (central)** : ${depenses_non_affectees:,.2f}
         
-        Ces dépenses ont été saisies avec la province **"Toutes"**. Pour les ventiler,
-        saisissez les dépenses avec le nom de la province concernée.
+        Ces dépenses ont été saisies avec le niveau **"National"**. Elles concernent
+        les activités réalisées au niveau central et ne sont pas ventilées par province.
         """)
     
     st.markdown("### 📈 Synthèse par province")
@@ -2233,7 +2239,6 @@ def show_finances_par_province(df_fin, budget_total):
             df_budget_long['province_name'] == province_selectionnee
         ].copy()
         
-        # Agréger TOUTES les dépenses (mensuelles + hebdo) par mois
         df_dep_prov = df_fin[
             df_fin['province_name'] == province_selectionnee
         ].copy()
@@ -2255,7 +2260,6 @@ def show_finances_par_province(df_fin, budget_total):
         df_suivi_mois['depenses_reelles'] = df_suivi_mois['depenses_reelles'].fillna(0)
         df_suivi_mois['ecart'] = df_suivi_mois['montant_prevu'] - df_suivi_mois['depenses_reelles']
         
-        # ⚠️ Protection division par zéro avec .apply
         df_suivi_mois['taux'] = df_suivi_mois.apply(
             lambda row: round((row['depenses_reelles'] / row['montant_prevu'] * 100), 1) 
             if row['montant_prevu'] > 0 else 0,
@@ -2354,8 +2358,16 @@ def show_finances_par_province(df_fin, budget_total):
 # ============================================================================
 
 def get_mois_projet():
+    """Retourne les mois du projet complet (10 mois) — pour le budget total"""
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
+    return pd.date_range(start=date_debut, end=date_fin, freq='MS')
+
+
+def get_mois_projet_affichage():
+    """Retourne les mois à afficher dans le tableau de suivi (6 mois)"""
+    date_debut = pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_debut'])
+    date_fin = pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_fin'])
     return pd.date_range(start=date_debut, end=date_fin, freq='MS')
 
 
@@ -2428,7 +2440,7 @@ def show_finances_tab(df_main):
     date_debut = pd.to_datetime(PROJET_CONFIG['date_debut'])
     date_fin = pd.to_datetime(PROJET_CONFIG['date_fin'])
     
-    # ========== LECTURE DYNAMIQUE DU BUDGET ==========
+    # ========== LECTURE DYNAMIQUE DU BUDGET (10 mois) ==========
     budget_total = get_budget_total()
     
     if budget_total == 0:
@@ -2437,16 +2449,23 @@ def show_finances_tab(df_main):
     
     df_budget, _ = load_budget_previsionnel()
     
-    # Nombre de mois du projet
-    mois_projet = get_mois_projet()
-    nb_mois_total = len(mois_projet)
+    # Mois du projet complet (10 mois) — pour le budget total
+    mois_projet_complet = get_mois_projet()
+    nb_mois_total = len(mois_projet_complet)   # = 10
     
-    # Prévision moyenne pour référence
-    prevision_mensuelle_moyenne = budget_total / nb_mois_total if nb_mois_total > 0 else 0
-    nb_semaines_total = nb_mois_total * 4
-    prevision_hebdo = budget_total / nb_semaines_total if nb_semaines_total > 0 else 0
+    # Mois à afficher dans le tableau (6 mois)
+    mois_projet = get_mois_projet_affichage()
+    nb_mois_affichage = len(mois_projet)        # = 6
+    
+    # Prévision mensuelle moyenne = Budget total / 6 (consommation sur 6 mois)
+    prevision_mensuelle_moyenne = budget_total / NB_MOIS_CONSOMMATION if NB_MOIS_CONSOMMATION > 0 else 0
+    
+    # Prévision hebdomadaire = Budget total / (6 mois × 4 semaines = 24 semaines)
+    nb_semaines_consommation = NB_MOIS_CONSOMMATION * 4   # = 24
+    prevision_hebdo = budget_total / nb_semaines_consommation if nb_semaines_consommation > 0 else 0
     
     aujourdhui = pd.Timestamp.now()
+    # Mois écoulés calculés sur la période d'affichage (6 mois)
     mois_ecoules = [m for m in mois_projet if m <= aujourdhui]
     nb_mois_ecoules = len(mois_ecoules)
     
@@ -2457,14 +2476,18 @@ def show_finances_tab(df_main):
             <tr>
                 <td><strong>Nom du projet :</strong></td>
                 <td>{PROJET_CONFIG['nom_projet']}</td>
-                <td><strong>Période :</strong></td>
+                <td><strong>Période du budget :</strong></td>
                 <td>{date_debut.strftime('%B %Y')} → {date_fin.strftime('%B %Y')}</td>
             </tr>
             <tr>
-                <td><strong>Budget total :</strong></td>
+                <td><strong>Budget total (10 mois) :</strong></td>
                 <td><strong>{budget_total:,.0f} USD</strong></td>
-                <td><strong>Durée :</strong></td>
-                <td>{nb_mois_total} mois</td>
+                <td><strong>Période d'affichage :</strong></td>
+                <td>{pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_debut']).strftime('%B %Y')} → {pd.to_datetime(PROJET_CONFIG_AFFICHAGE['date_fin']).strftime('%B %Y')} ({nb_mois_affichage} mois)</td>
+            </tr>
+            <tr>
+                <td><strong>Prévision mensuelle moyenne :</strong></td>
+                <td colspan="3"><strong>{prevision_mensuelle_moyenne:,.2f} USD / mois</strong> (Budget total ÷ {NB_MOIS_CONSOMMATION} mois)</td>
             </tr>
         </table>
     </div>
@@ -2545,8 +2568,9 @@ def show_finances_tab(df_main):
                 )
                 
                 province = st.selectbox(
-                    "🌍 Province",
-                    options=['Toutes'] + sorted(df_main['province_name'].dropna().unique().tolist())
+                    "🌍 Province / Niveau",
+                    options=['National'] + sorted(df_main['province_name'].dropna().unique().tolist()),
+                    help="Sélectionnez 'National' pour les dépenses réalisées au niveau central (non affectées à une province)"
                 )
             
             with col2:
@@ -2602,7 +2626,6 @@ def show_finances_tab(df_main):
     
     if len(df_fin) == 0:
         st.info("📋 Aucune donnée financière n'est encore enregistrée.")
-        # On affiche quand même le suivi par province
         show_finances_par_province(df_fin, budget_total)
         return
     
@@ -2625,7 +2648,8 @@ def show_finances_tab(df_main):
     
     budget_restant = budget_total - depenses_totales
     taux_absorption_global = (depenses_totales / budget_total * 100) if budget_total > 0 else 0
-    taux_temporel = (nb_mois_ecoules / nb_mois_total * 100) if nb_mois_total > 0 else 0
+    # Avancement temporel basé sur la période d'affichage (6 mois)
+    taux_temporel = (nb_mois_ecoules / nb_mois_affichage * 100) if nb_mois_affichage > 0 else 0
     ecart = taux_absorption_global - taux_temporel
     
     dp_recu_total = df_fin['nombre_dp_recu'].sum() if 'nombre_dp_recu' in df_fin.columns else 0
@@ -2633,7 +2657,7 @@ def show_finances_tab(df_main):
     dp_attente_total = df_fin['nombre_dp_en_attente'].sum() if 'nombre_dp_en_attente' in df_fin.columns else 0
     taux_traitement_dp = (dp_traite_total / dp_recu_total * 100) if dp_recu_total > 0 else 0
     
-    # Prévision à date = somme des prévisions des mois écoulés
+    # Prévision à date = somme des prévisions des mois écoulés (sur les 6 mois affichés)
     prevision_a_date = 0
     for mois in mois_ecoules:
         prevision_a_date += get_prevision_mois(mois.strftime('%Y-%m'))
@@ -2644,7 +2668,7 @@ def show_finances_tab(df_main):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("💰 Budget total projet", f"${budget_total:,.0f}")
+        st.metric("💰 Budget total projet (10 mois)", f"${budget_total:,.0f}")
     with col2:
         st.metric("💸 Dépenses cumulées", f"${depenses_totales:,.2f}",
                  delta=f"{(depenses_totales/budget_total*100):.1f}% du budget" if budget_total > 0 else None)
@@ -2671,8 +2695,8 @@ def show_finances_tab(df_main):
     col5, col6, col7, col8 = st.columns(4)
     
     with col5:
-        st.metric("⏱️ Avancement temporel", f"{taux_temporel:.1f}%",
-                 delta=f"{nb_mois_ecoules}/{nb_mois_total} mois")
+        st.metric("⏱️ Avancement temporel (6 mois)", f"{taux_temporel:.1f}%",
+                 delta=f"{nb_mois_ecoules}/{nb_mois_affichage} mois")
     with col6:
         if ecart > 10:
             delta_ecart = "🟢 En avance"
@@ -2687,7 +2711,7 @@ def show_finances_tab(df_main):
         st.metric("📊 Écart absorption/temps", f"{ecart:+.1f} pts",
                  delta=delta_ecart, delta_color=color_ecart)
     with col7:
-        st.metric("🎯 Prévision à date", f"${prevision_a_date:,.2f}")
+        st.metric("🎯 Prévision à date (6 mois)", f"${prevision_a_date:,.2f}")
     with col8:
         ecart_montant = depenses_totales - prevision_a_date
         if ecart_montant >= 0:
@@ -2745,15 +2769,15 @@ def show_finances_tab(df_main):
             return ''
     
     if 'Mensuel' in type_suivi:
-        st.markdown("### 📅 Suivi mensuel du budget")
-        st.info("ℹ️ **Note** : Le suivi mensuel agrège automatiquement les saisies **mensuelles ET hebdomadaires**.")
+        st.markdown("### 📅 Suivi mensuel du budget (6 mois affichés)")
+        st.info("ℹ️ **Note** : Le suivi mensuel agrège automatiquement les saisies **mensuelles ET hebdomadaires**. La prévision mensuelle moyenne est calculée sur **6 mois** (budget total ÷ 6).")
         
         data_mensuel = []
         for mois in mois_projet:
             mois_str = mois.strftime('%B %Y')
             mois_annee_str = mois.strftime('%Y-%m')
             
-            # Prévision du mois = somme des budgets de toutes les provinces
+            # Prévision du mois = somme des budgets de toutes les provinces pour ce mois
             prevision_ce_mois = get_prevision_mois(mois_annee_str)
             
             # Dépenses du mois = SOMME mensuel + hebdo
@@ -2785,14 +2809,14 @@ def show_finances_tab(df_main):
         
         df_mensuel = pd.DataFrame(data_mensuel)
         
-        # Ligne TOTAL
+        # Ligne TOTAL (sur les 6 mois affichés)
         total_prevision = df_mensuel['Prévision mensuelle ($)'].sum()
         total_depenses = df_mensuel['Dépenses réelles ($)'].sum()
         total_ecart = total_depenses - total_prevision
         total_taux = round((total_depenses / total_prevision * 100), 1) if total_prevision > 0 else 0
         
         total_row = pd.DataFrame([{
-            'Mois': '**TOTAL**',
+            'Mois': '**TOTAL (6 mois affichés)**',
             'Prévision mensuelle ($)': total_prevision,
             'Dépenses réelles ($)': total_depenses,
             'Écart ($)': total_ecart,
@@ -2800,7 +2824,17 @@ def show_finances_tab(df_main):
             'Statut': '📊 Bilan'
         }])
         
-        df_mensuel_final = pd.concat([df_mensuel, total_row], ignore_index=True)
+        # Ligne d'information sur le budget total du projet (10 mois)
+        info_row = pd.DataFrame([{
+            'Mois': '💰 Budget total projet (10 mois)',
+            'Prévision mensuelle ($)': budget_total,
+            'Dépenses réelles ($)': depenses_totales,
+            'Écart ($)': budget_total - depenses_totales,
+            'Taux (%)': round((depenses_totales / budget_total * 100), 1) if budget_total > 0 else 0,
+            'Statut': 'ℹ️ Référence'
+        }])
+        
+        df_mensuel_final = pd.concat([df_mensuel, total_row, info_row], ignore_index=True)
         
         df_mensuel_display = df_mensuel_final.copy()
         for col in ['Prévision mensuelle ($)', 'Dépenses réelles ($)', 'Écart ($)']:
@@ -2831,7 +2865,7 @@ def show_finances_tab(df_main):
             )
     
     else:
-        st.markdown("### 📆 Suivi hebdomadaire du budget")
+        st.markdown("### 📆 Suivi hebdomadaire du budget (6 mois affichés)")
         
         if len(df_fin_hebdo) == 0:
             st.info("📋 Aucune saisie hebdomadaire pour le moment.")
@@ -2910,7 +2944,7 @@ def show_finances_tab(df_main):
         df_hist['date_saisie'] = pd.to_datetime(df_hist['date_saisie']).dt.strftime('%d/%m/%Y')
         
         rename_dict = {
-            'type_suivi': 'Type', 'date_saisie': 'Date', 'province_name': 'Province',
+            'type_suivi': 'Type', 'date_saisie': 'Date', 'province_name': 'Province / Niveau',
             'depenses': 'Dépenses ($)', 'nombre_dp_recu': 'DP reçus',
             'nombre_dp_traite': 'DP traités', 'nombre_dp_en_attente': 'DP en attente',
             'observations': 'Observations'
