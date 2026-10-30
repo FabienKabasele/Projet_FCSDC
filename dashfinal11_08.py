@@ -1714,20 +1714,7 @@ def colorer_taux(val):
 def show_completude_promptitude_tab(df, niveau=None, province_selectionne=None, zone_sante_selectionne=None):
     st.subheader("📊 Complétude et Promptitude des rapports")
     st.markdown(f"**Date limite de soumission :** Le {DATE_LIMITE_JOUR} de chaque mois")
-    
-    if 'date_saisie' in df.columns:
-        total_soumissions = len(df)
-        soumissions_a_temps = df['est_prompt'].sum() if 'est_prompt' in df.columns else 0
-        taux_promptitude_global = (soumissions_a_temps / total_soumissions * 100) if total_soumissions > 0 else 0
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total soumissions", f"{total_soumissions}")
-        with col2:
-            st.metric("Soumissions à temps", f"{soumissions_a_temps}")
-        with col3:
-            st.metric("Taux promptitude global", f"{taux_promptitude_global:.1f}%")
-    
     st.markdown("---")
     
     if niveau == 'Zone Sante' and zone_sante_selectionne and zone_sante_selectionne != 'Toutes':
