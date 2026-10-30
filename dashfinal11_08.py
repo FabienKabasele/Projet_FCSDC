@@ -1767,6 +1767,45 @@ def show_summary_province(df):
             else '⚠️ Moyenne' if row['Taux_ZS'] >= 80 and row['Taux_CDT'] >= 80
             else '🔴 Faible', axis=1
         )
+
+                # ====================================================================
+        # LIGNE TOTAL GLOBAL (9 provinces)
+        # ====================================================================
+        total_row = {
+            'Province': '**TOTAL**',
+            'ZS_attendues': completeness['ZS_attendues'].sum(),
+            'ZS_soumises': completeness['ZS_soumises'].sum(),
+            'CDT_attendus': completeness['CDT_attendus'].sum(),
+            'CDT_soumis': completeness['CDT_soumis'].sum(),
+            'Dépistages': completeness['Dépistages'].sum(),
+            'Cas_présumés': completeness['Cas_présumés'].sum(),
+            'TB_détectée': completeness['TB_détectée'].sum(),
+            'Traitement_DS': completeness['Traitement_DS'].sum(),
+            'Test_RR': completeness['Test_RR'].sum(),
+            'Traitement_RR': completeness['Traitement_RR'].sum(),
+            'Dépistés_TPT': completeness['Dépistés_TPT'].sum(),
+            'TPT_commencé': completeness['TPT_commencé'].sum(),
+        }
+        
+        # Recalcul des taux globaux (somme num / somme dénom, PAS moyenne des taux)
+        total_row['Taux_ZS'] = round(
+            (total_row['ZS_soumises'] / total_row['ZS_attendues'] * 100)
+            if total_row['ZS_attendues'] > 0 else 0, 1
+        )
+        total_row['Taux_CDT'] = round(
+            (total_row['CDT_soumis'] / total_row['CDT_attendus'] * 100)
+            if total_row['CDT_attendus'] > 0 else 0, 1
+        )
+        
+        # Performance globale
+        total_row['Performance'] = (
+            '✅ Bonne' if total_row['Taux_ZS'] >= 100 and total_row['Taux_CDT'] >= 100
+            else '⚠️ Moyenne' if total_row['Taux_ZS'] >= 80 and total_row['Taux_CDT'] >= 80
+            else '🔴 Faible'
+        )
+        
+        # Ajouter la ligne TOTAL au DataFrame
+        completeness = pd.concat([completeness, pd.DataFrame([total_row])], ignore_index=True)
         
         cols_affichage = ['Province', 'ZS_attendues', 'ZS_soumises', 'Taux_ZS',
                          'CDT_attendus', 'CDT_soumis', 'Taux_CDT',
