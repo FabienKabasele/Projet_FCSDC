@@ -648,7 +648,30 @@ def load_and_process_data():
                 df[nom_col] = pd.to_numeric(df[nom_col], errors='coerce').fillna(0)
                 if 'date' in col:
                     df[nom_col] = pd.to_datetime(df[nom_col], errors='coerce')
-    
+        # ============================================================================
+    # DÉDUPLICATION : un seul enregistrement par établissement (facility_id)
+    # par mois et année. On garde la soumission la plus récente (date_saisie).
+    # ============================================================================
+    if 'facility_id' in df.columns and 'qmois' in df.columns and 'qannee_num' in df.columns:
+        # S'assurer que date_saisie est bien triable (NaT en dernier)
+        if 'date_saisie' in df.columns:
+            df = df.sort_values(
+                by=['facility_id', 'qannee_num', 'qmois', 'date_saisie'],
+                ascending=[True, True, True, False],  # date_saisie décroissante
+                na_position='last'
+            )
+        else:
+            df = df.sort_values(
+                by=['facility_id', 'qannee_num', 'qmois'],
+                ascending=[True, True, True]
+            )
+        
+        # Garder la première ligne de chaque groupe (la plus récente)
+        df = df.drop_duplicates(
+            subset=['facility_id', 'qannee_num', 'qmois'],
+            keep='first'
+        ).reset_index(drop=True)
+        
     return df
 
 def filter_by_hierarchy(df, niveau, province=None, facility=None, zone_sante=None):
