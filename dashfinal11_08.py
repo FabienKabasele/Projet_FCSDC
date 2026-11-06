@@ -470,19 +470,9 @@ def get_prevision_mois(mois_str):
     return 0
 
 
-@st.cache_data(ttl=300)  # cache 5 minutes (ajustable selon vos besoins)
+@st.cache_data
 def load_and_process_data():
-    # ===== LECTURE DIRECTE DEPUIS GOOGLE SHEETS (export CSV) =====
-    sheet_id = "1-F1L1un5oeABswWnAhKInBTD8_LAinAzxhZcTcGht3Y"
-    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-    
-    df = pd.read_csv(csv_url)
-    # ============================================================
-    
-    if 'qannee' in df.columns:
-        df['qannee_num'] = df['qannee'].apply(extraire_annee_num)
-    # ... tout le reste inchangé ...
-    return df
+    df = pd.read_csv('drc_stop_tb_data.csv')
     
     if 'qannee' in df.columns:
         df['qannee_num'] = df['qannee'].apply(extraire_annee_num)
